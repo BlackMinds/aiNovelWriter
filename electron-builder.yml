@@ -1,0 +1,23 @@
+appId: com.ainovel.writer
+productName: AI Novel Writer
+directories:
+  buildResources: assets
+  output: release
+files:
+  - dist/**/*
+  - src/main/**/*
+  - src/preload/**/*
+  - package.json
+win:
+  target: nsis
+  icon: assets/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+mac:
+  target: dmg
+  icon: assets/icon.icns
+linux:
+  target: AppImage
+  icon: assets/icon.png

@@ -1,0 +1,35 @@
+{
+  "name": "ai-novel-writer",
+  "version": "1.0.0",
+  "description": "AI-powered novel writing desktop application",
+  "main": "src/main/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "electron .",
+    "dev:electron": "node scripts/dev.js",
+    "build:electron": "vite build && electron-builder"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@codemirror/commands": "^6.10.2",
+    "@codemirror/lang-markdown": "^6.3.1",
+    "@codemirror/language": "^6.10.0",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.35.0",
+    "codemirror": "^6.0.1",
+    "element-plus": "^2.9.1",
+    "marked": "^15.0.0",
+    "pinia": "^2.3.0",
+    "playwright": "^1.58.2",
+    "vue": "^3.5.0",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.0",
+    "vite": "^6.0.0"
+  }
+}

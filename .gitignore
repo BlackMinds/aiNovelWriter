@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment / API keys
+pw-apikeys.js
+pw-apikeys2.js
+pw-apikeys3.js
+pw-check.txt
+pw-err.txt
+pw-install-log.txt
+pw-open.js
+
+# Electron builder
+*.exe
+*.dmg
+*.AppImage
+*.snap
+*.deb
+*.rpm
+release/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+nul
+
+# Temp files
+test1.txt
+test2.txt
+tmpinfo.txt
+
+# Claude
+.claude/
