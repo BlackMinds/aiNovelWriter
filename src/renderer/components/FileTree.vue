@@ -25,6 +25,16 @@
           <el-icon class="node-icon" v-if="data.isDir"><Folder /></el-icon>
           <el-icon class="node-icon" v-else><Document /></el-icon>
           <span class="node-label">{{ data.label }}</span>
+          <span
+            v-if="data.isDir && /^vol\d+$/.test(data.label)"
+            class="chapter-count"
+          >{{ chapterCount(data) }}章</span>
+          <el-icon
+            v-if="data.isDir && /^vol\d+$/.test(data.label)"
+            class="add-volume-btn"
+            title="新建章节"
+            @click.stop="emit('add-chapter', data)"
+          ><Plus /></el-icon>
         </span>
       </template>
     </el-tree>
@@ -54,7 +64,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { Refresh, Folder, Document, DocumentAdd, FolderAdd, Edit, Delete } from '@element-plus/icons-vue'
+import { Refresh, Folder, Document, DocumentAdd, FolderAdd, Edit, Delete, Plus } from '@element-plus/icons-vue'
 
 const props = defineProps({
   tree: { type: Array, default: () => [] },
@@ -62,7 +72,7 @@ const props = defineProps({
   projectPath: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'refresh', 'create-file', 'create-dir', 'delete', 'rename'])
+const emit = defineEmits(['select', 'refresh', 'create-file', 'create-dir', 'delete', 'rename', 'add-chapter'])
 
 const treeRef = ref(null)
 const treeProps = {
@@ -77,6 +87,11 @@ const contextMenu = ref({
   y: 0,
   node: null
 })
+
+function chapterCount(data) {
+  if (!data.children) return 0
+  return data.children.filter(c => !c.isDir && c.label.startsWith('ch')).length
+}
 
 function handleNodeClick(data) {
   if (!data.isDir) {
@@ -176,6 +191,31 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chapter-count {
+  margin-left: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.add-volume-btn {
+  margin-left: 4px;
+  color: var(--text-secondary);
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tree-node:hover .add-volume-btn {
+  opacity: 1;
+}
+
+.add-volume-btn:hover {
+  color: var(--accent);
 }
 
 /* Context Menu */

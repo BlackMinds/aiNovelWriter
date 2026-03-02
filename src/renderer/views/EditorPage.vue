@@ -18,11 +18,14 @@
         <el-button text :disabled="!isChapterFile" @click="continueWriting">
           <el-icon><EditPen /></el-icon> 续写
         </el-button>
-        <el-button text :disabled="!isChapterFile" @click="summarizeChapter">
+        <!-- <el-button text :disabled="!isChapterFile" @click="summarizeChapter">
           <el-icon><Document /></el-icon> 生成摘要
-        </el-button>
+        </el-button> -->
       </div>
       <div class="toolbar-right">
+        <el-button text @click="handleExport">
+          <el-icon><Download /></el-icon> 导出
+        </el-button>
         <el-button text @click="togglePreview">
           <el-icon><View /></el-icon> {{ showPreview ? '编辑' : '预览' }}
         </el-button>
@@ -46,6 +49,7 @@
           @create-dir="handleCreateDir"
           @delete="handleDelete"
           @rename="handleRename"
+          @add-chapter="handleAddChapter"
         />
       </div>
 
@@ -100,7 +104,7 @@ import AiPanel from '../components/AiPanel.vue'
 import StatusBar from '../components/StatusBar.vue'
 import {
   HomeFilled, DocumentChecked, MagicStick, EditPen,
-  Document, View, ChatDotRound
+  Document, View, ChatDotRound, Download
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -330,6 +334,27 @@ async function handleRename(node) {
       await refreshTree()
     }
   } catch { /* cancelled */ }
+}
+
+async function handleExport() {
+  const { ElMessage } = await import('element-plus')
+  try {
+    const filePath = await window.electronAPI.exportTxt(projectStore.projectPath)
+    if (filePath) {
+      ElMessage({ message: `已导出到 ${filePath}`, type: 'success', duration: 4000 })
+    }
+  } catch (e) {
+    ElMessage({ message: `导出失败: ${e.message}`, type: 'error' })
+  }
+}
+
+async function handleAddChapter(volNode) {
+  try {
+    await window.electronAPI.addChapter(volNode.path)
+    await refreshTree()
+  } catch (e) {
+    console.error('新建章节失败:', e)
+  }
 }
 
 function togglePreview() {

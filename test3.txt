@@ -1,4 +1,0 @@
-start
-launching browser...
-browser launched!
-page loaded: https://foxcode.rjj.cc/auth/login

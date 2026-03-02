@@ -6,6 +6,7 @@ export const useAiStore = defineStore('ai', () => {
   const streamContent = ref('')
   const statusMessage = ref('')
   const apiKeySet = ref(false)
+  const selectedModel = ref('gemini-2.5-flash')
 
   function startStream() {
     isStreaming.value = true
@@ -32,8 +33,13 @@ export const useAiStore = defineStore('ai', () => {
     statusMessage.value = ''
   }
 
+  async function changeModel(model) {
+    await window.electronAPI.setModel(model)
+    selectedModel.value = model
+  }
+
   return {
-    isStreaming, streamContent, statusMessage, apiKeySet,
-    startStream, appendChunk, endStream, setError, clearStream
+    isStreaming, streamContent, statusMessage, apiKeySet, selectedModel,
+    startStream, appendChunk, endStream, setError, clearStream, changeModel
   }
 })

@@ -15,7 +15,7 @@
         </el-button>
       </div>
 
-      <div class="api-key-section">
+      <!-- <div class="api-key-section">
         <el-input
           v-model="apiKeyInput"
           :type="showKey ? 'text' : 'password'"
@@ -34,7 +34,7 @@
           </template>
         </el-input>
         <span v-if="aiStore.apiKeySet" class="key-status">API Key 已设置</span>
-      </div>
+      </div> -->
     </div>
 
     <div class="recent-section" v-if="projectStore.recentProjects.length > 0">

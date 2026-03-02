@@ -12,10 +12,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Project operations
   createProject: (options) => ipcRenderer.invoke('project:create', options),
+  addChapter: (volDirPath) => ipcRenderer.invoke('project:addChapter', volDirPath),
   openProject: (projectPath) => ipcRenderer.invoke('project:open', projectPath),
   getRecentProjects: () => ipcRenderer.invoke('project:getRecent'),
   importProject: () => ipcRenderer.invoke('project:import'),
   selectDir: () => ipcRenderer.invoke('dialog:selectDir'),
+  exportTxt: (projectPath) => ipcRenderer.invoke('project:exportTxt', projectPath),
 
   // AI operations
   generateStructure: (options) => ipcRenderer.invoke('ai:generateStructure', options),
@@ -25,6 +27,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   customPrompt: (options) => ipcRenderer.invoke('ai:customPrompt', options),
   setApiKey: (key) => ipcRenderer.invoke('ai:setKey', key),
   getApiKey: () => ipcRenderer.invoke('ai:getKey'),
+  setModel: (model) => ipcRenderer.invoke('ai:setModel', model),
+  getModel: () => ipcRenderer.invoke('ai:getModel'),
+  getAvailableModels: () => ipcRenderer.invoke('ai:getAvailableModels'),
 
   // AI streaming listeners
   onStreamChunk: (callback) => {
@@ -41,5 +46,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event, error) => callback(error)
     ipcRenderer.on('ai:stream-error', handler)
     return () => ipcRenderer.removeListener('ai:stream-error', handler)
+  },
+  onBackgroundDone: (callback) => {
+    const handler = (_event, msg) => callback(msg)
+    ipcRenderer.on('ai:background-done', handler)
+    return () => ipcRenderer.removeListener('ai:background-done', handler)
   },
 })

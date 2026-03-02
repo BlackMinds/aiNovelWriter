@@ -1,18 +1,39 @@
-const Anthropic = require('@anthropic-ai/sdk')
+const { GoogleGenAI } = require('@google/genai')
+
+const MODELS = {
+  'gemini-2.5-pro': 'gemini-2.5-pro',
+  'gemini-2.5-flash': 'gemini-2.5-flash'
+}
 
 class AiService {
   constructor() {
     this.client = null
-    this.apiKey = ''
+    this.apiKey = 'AIzaSyB2UeWFYWZ3Ffrvmfk_hXyokijAAJccEGs'
+    this.model = 'gemini-2.5-flash'
+    this.setApiKey(this.apiKey)
   }
 
   setApiKey(key) {
     this.apiKey = key
-    this.client = new Anthropic({ apiKey: key })
+    this.client = new GoogleGenAI({ apiKey: key })
   }
 
   getApiKey() {
     return this.apiKey
+  }
+
+  setModel(model) {
+    if (MODELS[model]) {
+      this.model = model
+    }
+  }
+
+  getModel() {
+    return this.model
+  }
+
+  getAvailableModels() {
+    return Object.keys(MODELS)
   }
 
   _ensureClient() {
@@ -21,27 +42,41 @@ class AiService {
     }
   }
 
+  // 将 Anthropic 格式的 messages 转为 Gemini 格式
+  _convertMessages(messages) {
+    return messages.map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }))
+  }
+
   async streamChat(systemPrompt, messages, webContents) {
     this._ensureClient()
 
     try {
-      const stream = this.client.messages.stream({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages
+      const stream = await this.client.models.generateContentStream({
+        model: this.model,
+        contents: this._convertMessages(messages),
+        config: {
+          systemInstruction: systemPrompt,
+          maxOutputTokens: 16000,
+          temperature: 1.2,
+          topP: 0.95,
+          topK: 60
+        }
       })
 
       let fullContent = ''
 
-      stream.on('text', (text) => {
-        fullContent += text
-        if (webContents && !webContents.isDestroyed()) {
-          webContents.send('ai:stream-chunk', text)
+      for await (const chunk of stream) {
+        const text = chunk.text
+        if (text) {
+          fullContent += text
+          if (webContents && !webContents.isDestroyed()) {
+            webContents.send('ai:stream-chunk', text)
+          }
         }
-      })
-
-      await stream.finalMessage()
+      }
 
       if (webContents && !webContents.isDestroyed()) {
         webContents.send('ai:stream-end', fullContent)
@@ -102,13 +137,15 @@ class AiService {
   }
 
   async generateChapter(contextData, webContents) {
-    const { systemPrompt, worldSetting, characters, totalOutline, volumeOutline,
-            volumeSummary, prevSummaries, recentChapters, currentContent, instruction } = contextData
+    const { systemPrompt, worldSetting, characters, totalOutline, currentContext,
+            volumeOutline, volumeSummary, prevSummaries, recentChapters,
+            currentContent, instruction } = contextData
 
     const contextParts = []
     if (worldSetting) contextParts.push(`## 世界观设定\n${worldSetting}`)
     if (characters) contextParts.push(`## 人物档案\n${characters}`)
     if (totalOutline) contextParts.push(`## 总大纲\n${totalOutline}`)
+    if (currentContext) contextParts.push(`## 当前写作上下文\n${currentContext}`)
     if (volumeOutline) contextParts.push(`## 当前卷大纲\n${volumeOutline}`)
     if (volumeSummary) contextParts.push(`## 当前卷摘要\n${volumeSummary}`)
     if (prevSummaries) contextParts.push(`## 前几章摘要\n${prevSummaries}`)
@@ -139,6 +176,69 @@ class AiService {
     ]
 
     return this.streamChat(systemPrompt, messages, webContents)
+  }
+
+  async updateCurrentContext(chapterContent, volumeLabel, chapterNum, existingContext) {
+    const systemPrompt = `你是一位专业的小说写作助手，负责维护写作状态追踪文档。
+请根据刚刚完成的章节内容，更新"当前写作上下文"文档。
+这份文档将在后续章节生成时注入 AI 提示词，帮助 AI 快速了解当前状态。
+请严格按照指定 Markdown 格式输出，不要输出任何其他内容。`
+
+    const messages = [
+      {
+        role: 'user',
+        content: `请根据以下信息，生成更新后的写作上下文文档。
+
+已有上下文（供参考，在此基础上更新）：
+${existingContext || '（暂无）'}
+
+刚完成章节：${volumeLabel} 第${chapterNum}章
+章节内容：
+${chapterContent}
+
+请严格按照以下格式输出（不要输出任何其他内容）：
+
+# 当前写作上下文
+
+## 当前进度
+- 当前卷：${volumeLabel}
+- 最新完成章：第${chapterNum}章
+
+## 主要角色状态
+（各主要角色目前的位置、状态、目标，每人一行）
+
+## 活跃剧情线
+（当前正在推进的主线/支线，简洁列举）
+
+## 近期关键事件
+（最近2-3章的重要事件，每条一行）
+
+## 待呼应伏笔
+（已埋下但尚未揭晓的伏笔，后续章节需注意）`
+      }
+    ]
+
+    return this.streamChat(systemPrompt, messages, null)
+  }
+
+  async generateChapterOutlineEntry(chapterContent, chapterNum) {
+    const systemPrompt = '你是一位小说章节分析助手。请为给定的章节内容生成一个简洁的大纲条目，严格按照指定格式输出，不要输出任何其他内容。'
+
+    const messages = [
+      {
+        role: 'user',
+        content: `请为以下章节内容生成大纲条目，严格按照如下格式输出（不要输出任何其他内容）：
+
+### 第${chapterNum}章（已完成）
+**标题**：xxx
+**概要**：xxx（2-3句话概括本章核心情节）
+
+章节内容：
+${chapterContent}`
+      }
+    ]
+
+    return this.streamChat(systemPrompt, messages, null)
   }
 
   async customPrompt(options, webContents) {

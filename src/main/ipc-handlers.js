@@ -1,10 +1,22 @@
 const { dialog, BrowserWindow } = require('electron')
 const path = require('path')
+const fs = require('fs')
 const fileManager = require('./file-manager')
 const projectManager = require('./project-manager')
 const aiService = require('./ai-service')
 const contextBuilder = require('./context-builder')
 const summarizer = require('./summarizer')
+
+function stripMarkdown(text) {
+  return text
+    .replace(/^#{1,6}\s+/gm, '')       // # 标题
+    .replace(/\*\*(.+?)\*\*/g, '$1')   // **粗体**
+    .replace(/\*(.+?)\*/g, '$1')       // *斜体*
+    .replace(/`(.+?)`/g, '$1')         // `代码`
+    .replace(/^>\s+/gm, '')            // > 引用
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1') // [链接](url)
+    .trim()
+}
 
 function registerIpcHandlers(ipcMain) {
   // File operations
@@ -121,6 +133,41 @@ function registerIpcHandlers(ipcMain) {
     }
   })
 
+  ipcMain.handle('project:addChapter', async (_event, volDirPath) => {
+    try {
+      const existing = fs.existsSync(volDirPath)
+        ? fs.readdirSync(volDirPath).filter(f => /^ch\d+\.md$/.test(f)).sort()
+        : []
+      const nextNum = existing.length > 0
+        ? parseInt(existing[existing.length - 1].replace('ch', '').replace('.md', '')) + 1
+        : 1
+      const chName = `ch${String(nextNum).padStart(3, '0')}.md`
+
+      // Try to get planned title from outline.md
+      let title = ''
+      const outlinePath = path.join(volDirPath, 'outline.md')
+      if (fs.existsSync(outlinePath)) {
+        const lines = fs.readFileSync(outlinePath, 'utf-8').split('\n')
+        for (let i = 0; i < lines.length; i++) {
+          const headingMatch = lines[i].match(/^### 第(\d+)章/)
+          if (headingMatch && parseInt(headingMatch[1]) === nextNum) {
+            for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+              const titleMatch = lines[j].match(/\*\*标题\*\*[：:]\s*(.+)/)
+              if (titleMatch) { title = titleMatch[1].trim(); break }
+            }
+            break
+          }
+        }
+      }
+
+      const heading = title ? `# 第${nextNum}章 ${title}` : `# 第${nextNum}章`
+      fileManager.createFile(path.join(volDirPath, chName), `${heading}\n\n`)
+      return chName
+    } catch (error) {
+      throw new Error(`新建章节失败: ${error.message}`)
+    }
+  })
+
   ipcMain.handle('dialog:selectDir', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const result = await dialog.showOpenDialog(win, {
@@ -131,6 +178,48 @@ function registerIpcHandlers(ipcMain) {
     return result.filePaths[0]
   })
 
+  ipcMain.handle('project:exportTxt', async (event, projectPath) => {
+    try {
+      const win = BrowserWindow.getFocusedWindow()
+
+      // Read project name
+      let projectName = path.basename(projectPath)
+      const configPath = path.join(projectPath, 'project.json')
+      if (fs.existsSync(configPath)) {
+        try { projectName = JSON.parse(fs.readFileSync(configPath, 'utf-8')).name || projectName } catch {}
+      }
+
+      const result = await dialog.showSaveDialog(win, {
+        title: '导出 TXT',
+        defaultPath: path.join(projectPath, `${projectName}.txt`),
+        filters: [{ name: '文本文件', extensions: ['txt'] }]
+      })
+      if (result.canceled || !result.filePath) return null
+
+      // Collect all chapters in order
+      const volumesDir = path.join(projectPath, 'volumes')
+      const volumes = fs.existsSync(volumesDir)
+        ? fs.readdirSync(volumesDir).filter(d => /^vol\d+$/.test(d)).sort()
+        : []
+
+      const parts = []
+      for (const vol of volumes) {
+        const volDir = path.join(volumesDir, vol)
+        const chapters = fs.readdirSync(volDir)
+          .filter(f => /^ch\d+\.md$/.test(f)).sort()
+        for (const ch of chapters) {
+          const content = fs.readFileSync(path.join(volDir, ch), 'utf-8')
+          parts.push(stripMarkdown(content))
+        }
+      }
+
+      fs.writeFileSync(result.filePath, parts.join('\n\n\n'), 'utf-8')
+      return result.filePath
+    } catch (error) {
+      throw new Error(`导出失败: ${error.message}`)
+    }
+  })
+
   // AI operations
   ipcMain.handle('ai:setKey', async (_event, key) => {
     aiService.setApiKey(key)
@@ -139,6 +228,19 @@ function registerIpcHandlers(ipcMain) {
 
   ipcMain.handle('ai:getKey', async () => {
     return aiService.getApiKey()
+  })
+
+  ipcMain.handle('ai:setModel', async (_event, model) => {
+    aiService.setModel(model)
+    return true
+  })
+
+  ipcMain.handle('ai:getModel', async () => {
+    return aiService.getModel()
+  })
+
+  ipcMain.handle('ai:getAvailableModels', async () => {
+    return aiService.getAvailableModels()
   })
 
   ipcMain.handle('ai:generateStructure', async (event, options) => {
@@ -157,7 +259,41 @@ function registerIpcHandlers(ipcMain) {
       const { volume, chapter } = contextBuilder.parseLocation(projectPath, filePath)
       const context = contextBuilder.buildContext(projectPath, volume, chapter)
       context.instruction = instruction
-      return await aiService.generateChapter(context, webContents)
+      const fullContent = await aiService.generateChapter(context, webContents)
+
+      if (fullContent.length > 300 && volume && chapter) {
+        try {
+          const chapterNum = parseInt(chapter.replace('ch', '').replace('.md', ''))
+          const volLabel = `第${parseInt(volume.replace('vol', ''))}卷`
+
+          const summary = await aiService.summarizeChapter(fullContent, null)
+          if (summary) {
+            await summarizer.updateVolumeSummary(projectPath, volume, chapter, summary)
+          }
+
+          const entry = await aiService.generateChapterOutlineEntry(fullContent, chapterNum)
+          if (entry) {
+            const outlinePath = path.join(projectPath, 'volumes', volume, 'outline.md')
+            const existing = fs.existsSync(outlinePath) ? fs.readFileSync(outlinePath, 'utf-8') : ''
+            fs.writeFileSync(outlinePath, existing + '\n\n' + entry, 'utf-8')
+          }
+
+          const contextPath = path.join(projectPath, 'context', 'current.md')
+          const existingContext = fs.existsSync(contextPath) ? fs.readFileSync(contextPath, 'utf-8') : ''
+          const updatedContext = await aiService.updateCurrentContext(fullContent, volLabel, chapterNum, existingContext)
+          if (updatedContext) {
+            fs.writeFileSync(contextPath, updatedContext, 'utf-8')
+          }
+
+          if (!webContents.isDestroyed()) {
+            webContents.send('ai:background-done', '摘要、大纲和写作上下文已自动更新')
+          }
+        } catch (e) {
+          console.warn('[AutoTask] 失败:', e.message)
+        }
+      }
+
+      return fullContent
     } catch (error) {
       throw new Error(`AI 生成章节失败: ${error.message}`)
     }
@@ -170,7 +306,41 @@ function registerIpcHandlers(ipcMain) {
       const { volume, chapter } = contextBuilder.parseLocation(projectPath, filePath)
       const context = contextBuilder.buildContext(projectPath, volume, chapter)
       context.instruction = instruction || '请继续写作，保持当前的节奏和风格。'
-      return await aiService.generateChapter(context, webContents)
+      const fullContent = await aiService.generateChapter(context, webContents)
+
+      if (fullContent.length > 300 && volume && chapter) {
+        try {
+          const chapterNum = parseInt(chapter.replace('ch', '').replace('.md', ''))
+          const volLabel = `第${parseInt(volume.replace('vol', ''))}卷`
+
+          const summary = await aiService.summarizeChapter(fullContent, null)
+          if (summary) {
+            await summarizer.updateVolumeSummary(projectPath, volume, chapter, summary)
+          }
+
+          const entry = await aiService.generateChapterOutlineEntry(fullContent, chapterNum)
+          if (entry) {
+            const outlinePath = path.join(projectPath, 'volumes', volume, 'outline.md')
+            const existing = fs.existsSync(outlinePath) ? fs.readFileSync(outlinePath, 'utf-8') : ''
+            fs.writeFileSync(outlinePath, existing + '\n\n' + entry, 'utf-8')
+          }
+
+          const contextPath = path.join(projectPath, 'context', 'current.md')
+          const existingContext = fs.existsSync(contextPath) ? fs.readFileSync(contextPath, 'utf-8') : ''
+          const updatedContext = await aiService.updateCurrentContext(fullContent, volLabel, chapterNum, existingContext)
+          if (updatedContext) {
+            fs.writeFileSync(contextPath, updatedContext, 'utf-8')
+          }
+
+          if (!webContents.isDestroyed()) {
+            webContents.send('ai:background-done', '摘要、大纲和写作上下文已自动更新')
+          }
+        } catch (e) {
+          console.warn('[AutoTask] 失败:', e.message)
+        }
+      }
+
+      return fullContent
     } catch (error) {
       throw new Error(`AI 续写失败: ${error.message}`)
     }

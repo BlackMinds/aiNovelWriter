@@ -2,6 +2,15 @@
   <div class="ai-panel">
     <div class="panel-header">
       <span class="panel-title">AI 助手</span>
+      <el-select
+        v-model="aiStore.selectedModel"
+        size="small"
+        class="model-select"
+        @change="onModelChange"
+      >
+        <el-option label="Gemini 2.5 Pro" value="gemini-2.5-pro" />
+        <el-option label="Gemini 2.5 Flash" value="gemini-2.5-flash" />
+      </el-select>
     </div>
 
     <!-- Quick Actions -->
@@ -20,13 +29,13 @@
       >
         续写
       </el-button>
-      <el-button
+      <!-- <el-button
         size="small"
         @click="handleAction('summarize')"
         :disabled="aiStore.isStreaming || !isChapter"
       >
         生成摘要
-      </el-button>
+      </el-button> -->
     </div>
 
     <!-- Custom prompt -->
@@ -82,10 +91,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAiStore } from '../stores/ai.js'
 import { marked } from 'marked'
 import { Loading } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps({
   projectPath: { type: String, default: '' },
@@ -98,6 +108,17 @@ const emit = defineEmits(['insert'])
 const aiStore = useAiStore()
 const customPrompt = ref('')
 const outputRef = ref(null)
+let cleanupBackgroundDone = null
+
+onMounted(() => {
+  cleanupBackgroundDone = window.electronAPI.onBackgroundDone((msg) => {
+    ElMessage({ message: msg, type: 'success', duration: 3000 })
+  })
+})
+
+onUnmounted(() => {
+  cleanupBackgroundDone?.()
+})
 
 const isChapter = computed(() => {
   if (!props.currentFile) return false
@@ -164,6 +185,10 @@ async function sendCustomPrompt() {
   }
 }
 
+async function onModelChange(model) {
+  await aiStore.changeModel(model)
+}
+
 function insertContent() {
   emit('insert', aiStore.streamContent)
   aiStore.clearStream()
@@ -194,12 +219,19 @@ async function copyContent() {
 .panel-header {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .panel-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+.model-select {
+  width: 140px;
 }
 
 .quick-actions {
