@@ -8,7 +8,7 @@ const MODELS = {
 class AiService {
   constructor() {
     this.client = null
-    this.apiKey = 'AIzaSyB2UeWFYWZ3Ffrvmfk_hXyokijAAJccEGs'
+    this.apiKey = '手工输入'
     this.model = 'gemini-2.5-flash'
     this.setApiKey(this.apiKey)
   }
