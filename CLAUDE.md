@@ -103,6 +103,7 @@ aiNovel/
 | `ai:continueWriting` | { projectPath, filePath, instruction } | 续写章节（流式）|
 | `ai:summarize` | { projectPath, filePath } | 生成章节摘要并更新卷摘要 |
 | `ai:customPrompt` | { systemPrompt, userMessage, context } | 自定义 AI 提问 |
+| `ai:detectAiContent` | content | 检测文本 AI 程度，返回评分和建议 |
 
 ### AI 流式事件（主进程 → 渲染进程）
 | 事件 | 数据 | 说明 |
@@ -207,3 +208,21 @@ npm run build:electron # 完整打包（Vite build + electron-builder）
 
 - 深色主题，主色 `#1a1a2e`（窗口背景）
 - 强调色 `#e94560`（CSS 变量 `--accent`）
+
+## AI 内容检测
+
+### 功能说明
+- 分析当前文章内容，识别可能由 AI 生成的部分
+- 给出 0-100 的 AI 程度评分（0=完全人工，100=完全AI）
+- 标注疑似 AI 生成的具体片段及判断理由
+- 提供人性化改进建议
+
+### 使用方式
+- 在编辑器工具栏点击"AI 检测"按钮
+- 支持任何有内容的文件（不限于章节文件）
+- 检测结果以弹窗形式展示，包含评分、分析、疑似片段和建议
+
+### 技术实现
+- 调用 Gemini API 进行文本分析
+- 返回 JSON 格式结果：`{ score, analysis, aiLikeParts, suggestions }`
+- 前端使用 ElMessageBox 展示格式化的检测报告

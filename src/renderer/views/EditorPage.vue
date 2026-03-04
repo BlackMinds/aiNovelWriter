@@ -18,18 +18,21 @@
         <el-button text :disabled="!isChapterFile" @click="continueWriting">
           <el-icon><EditPen /></el-icon> 续写
         </el-button>
-        <!-- <el-button text :disabled="!isChapterFile" @click="summarizeChapter">
-          <el-icon><Document /></el-icon> 生成摘要
-        </el-button> -->
+        <el-button text :disabled="!projectStore.currentContent" @click="detectAi">
+          <el-icon><View /></el-icon> AI 检测
+        </el-button>
       </div>
       <div class="toolbar-right">
+        <el-button text @click="handleSyncCheck">
+          <el-icon><Refresh /></el-icon> 同步检查
+        </el-button>
         <el-button text @click="handleExport">
           <el-icon><Download /></el-icon> 导出
         </el-button>
         <el-button text @click="togglePreview">
           <el-icon><View /></el-icon> {{ showPreview ? '编辑' : '预览' }}
         </el-button>
-        <el-button text @click="toggleAiPanel">
+        <el-button text @click="toggleRightPanel">
           <el-icon><ChatDotRound /></el-icon> AI 面板
         </el-button>
       </div>
@@ -68,7 +71,7 @@
       </div>
 
       <!-- Right: AI Panel (collapsible) -->
-      <template v-if="showAiPanel">
+      <template v-if="showRightPanel">
         <div class="resize-handle" @mousedown="startResize('right', $event)"></div>
         <div class="right-panel" :style="{ width: rightPanelWidth + 'px' }">
           <AiPanel
@@ -104,7 +107,7 @@ import AiPanel from '../components/AiPanel.vue'
 import StatusBar from '../components/StatusBar.vue'
 import {
   HomeFilled, DocumentChecked, MagicStick, EditPen,
-  Document, View, ChatDotRound, Download
+  Document, View, ChatDotRound, Download, Refresh
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -112,7 +115,7 @@ const projectStore = useProjectStore()
 const aiStore = useAiStore()
 
 const showPreview = ref(false)
-const showAiPanel = ref(true)
+const showRightPanel = ref(true)
 const leftPanelWidth = ref(220)
 const rightPanelWidth = ref(320)
 
@@ -361,8 +364,68 @@ function togglePreview() {
   showPreview.value = !showPreview.value
 }
 
-function toggleAiPanel() {
-  showAiPanel.value = !showAiPanel.value
+function toggleRightPanel() {
+  showRightPanel.value = !showRightPanel.value
+}
+
+async function detectAi() {
+  if (!projectStore.currentContent) return
+
+  const { ElMessageBox, ElLoading } = await import('element-plus')
+  const loading = ElLoading.service({ text: 'AI 检测中...' })
+
+  try {
+    const result = await window.electronAPI.detectAiContent(projectStore.currentContent)
+    loading.close()
+
+    const parts = result.aiLikeParts.map((p, i) =>
+      `<div style="margin: 8px 0; padding: 8px; background: #2a2a3e; border-radius: 4px;">
+        <div style="color: #e94560; font-weight: bold;">片段 ${i + 1}:</div>
+        <div style="margin: 4px 0;">${p.text.slice(0, 100)}...</div>
+        <div style="color: #999; font-size: 12px;">原因: ${p.reason}</div>
+      </div>`
+    ).join('')
+
+    const suggestions = result.suggestions.map(s => `<li>${s}</li>`).join('')
+
+    ElMessageBox.alert(
+      `<div style="max-height: 400px; overflow-y: auto;">
+        <div style="font-size: 16px; margin-bottom: 12px;">
+          <span style="color: #e94560; font-weight: bold;">AI 程度: ${result.score}%</span>
+        </div>
+        <div style="margin-bottom: 12px; color: #ccc;">${result.analysis}</div>
+        ${result.aiLikeParts.length > 0 ? `<div style="margin: 12px 0;"><strong>疑似 AI 片段:</strong>${parts}</div>` : ''}
+        ${result.suggestions.length > 0 ? `<div style="margin: 12px 0;"><strong>改进建议:</strong><ul style="margin: 8px 0; padding-left: 20px;">${suggestions}</ul></div>` : ''}
+      </div>`,
+      'AI 内容检测结果',
+      { dangerouslyUseHTMLString: true, confirmButtonText: '知道了' }
+    )
+  } catch (e) {
+    loading.close()
+    const { ElMessage } = await import('element-plus')
+    ElMessage.error(`检测失败: ${e.message}`)
+  }
+}
+
+async function handleSyncCheck() {
+  const { ElLoading, ElMessage } = await import('element-plus')
+  const loading = ElLoading.service({ text: '检查同步中...' })
+
+  try {
+    const result = await window.electronAPI.syncCheck(projectStore.projectPath)
+    loading.close()
+
+    if (result.errors.length > 0) {
+      ElMessage.warning(`检查完成：${result.checked} 个章节，同步 ${result.synced} 个，${result.errors.length} 个失败`)
+    } else if (result.synced > 0) {
+      ElMessage.success(`检查完成：${result.checked} 个章节，同步 ${result.synced} 个`)
+    } else {
+      ElMessage.info(`检查完成：${result.checked} 个章节，全部已同步`)
+    }
+  } catch (e) {
+    loading.close()
+    ElMessage.error(`同步检查失败: ${e.message}`)
+  }
 }
 
 function goHome() {

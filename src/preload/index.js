@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   importProject: () => ipcRenderer.invoke('project:import'),
   selectDir: () => ipcRenderer.invoke('dialog:selectDir'),
   exportTxt: (projectPath) => ipcRenderer.invoke('project:exportTxt', projectPath),
+  syncCheck: (projectPath) => ipcRenderer.invoke('project:syncCheck', projectPath),
 
   // AI operations
   generateStructure: (options) => ipcRenderer.invoke('ai:generateStructure', options),
@@ -30,6 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setModel: (model) => ipcRenderer.invoke('ai:setModel', model),
   getModel: () => ipcRenderer.invoke('ai:getModel'),
   getAvailableModels: () => ipcRenderer.invoke('ai:getAvailableModels'),
+  detectAiContent: (content) => ipcRenderer.invoke('ai:detectAiContent', content),
 
   // AI streaming listeners
   onStreamChunk: (callback) => {

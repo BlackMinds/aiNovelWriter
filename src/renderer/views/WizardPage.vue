@@ -56,7 +56,7 @@
 
             <el-form-item label="规划卷数">
               <el-input-number v-model="form.volumes" :min="1" :max="30" />
-              <span class="volume-hint">（每卷约 30-50 章，每章约 3000-5000 字）</span>
+              <span class="volume-hint">（每卷约 30-70 章，每章约 3000-5000 字）</span>
             </el-form-item>
 
             <el-form-item label="各大阶段描述（可选）">

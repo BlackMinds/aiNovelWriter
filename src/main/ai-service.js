@@ -123,7 +123,7 @@ class AiService {
 1. 世界观设定丰富且自洽
 2. 人物形象鲜明，有成长弧线
 3. 剧情有起伏节奏，伏笔和呼应
-4. 全书规划为 ${volumes} 卷，每卷约 30-50 章
+4. 全书规划为 ${volumes} 卷，每卷约 30-70 章
 5. 适合中文网络小说读者的阅读习惯`
 
     const messages = [
@@ -151,14 +151,14 @@ class AiService {
     if (prevSummaries) contextParts.push(`## 前几章摘要\n${prevSummaries}`)
     if (recentChapters) contextParts.push(`## 最近章节内容\n${recentChapters}`)
 
-    const fullSystemPrompt = `${systemPrompt || '你是一位资深网络小说作家。请根据上下文信息续写小说内容。'}\n\n以下是小说的上下文信息：\n\n${contextParts.join('\n\n')}`
+    const fullSystemPrompt = `${systemPrompt || '你是一位资深网络小说作家。请根据上下文信息续写小说内容。'}\n\n以下是小说的上下文信息：\n\n${contextParts.join('\n\n')}\n\n重要：请务必以 Markdown 格式的一级标题（# 标题）开头，标题要简洁有吸引力，然后再写正文内容。`
 
     const messages = [
       {
         role: 'user',
         content: currentContent
           ? `当前章节已有内容：\n${currentContent}\n\n${instruction || '请续写本章内容。'}`
-          : instruction || '请根据大纲开始撰写本章内容。'
+          : instruction || '请根据大纲开始撰写本章内容'
       }
     ]
 
@@ -253,6 +253,43 @@ ${chapterContent}`
     ]
 
     return this.streamChat(fullSystem, messages, webContents)
+  }
+
+  async detectAiContent(content) {
+    this._ensureClient()
+
+    const systemPrompt = '你是一位专业的文本分析专家，擅长识别 AI 生成的内容特征。请客观分析文本，给出评分和具体建议。'
+
+    const messages = [
+      {
+        role: 'user',
+        content: `请分析以下文本，判断哪些部分可能是 AI 生成的。请严格按照 JSON 格式输出，不要输出任何其他内容：
+
+{
+  "score": 0-100的整数（AI程度评分，0=完全人工，100=完全AI），
+  "analysis": "整体分析（2-3句话）",
+  "aiLikeParts": [
+    { "text": "具体文本片段", "reason": "判断理由" }
+  ],
+  "suggestions": ["改进建议1", "建议2"]
+}
+
+待分析文本：
+${content.slice(0, 3000)}`
+      }
+    ]
+
+    const result = await this.streamChat(systemPrompt, messages, null)
+
+    try {
+      const jsonMatch = result.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0])
+      }
+      return { score: 0, analysis: '解析失败', aiLikeParts: [], suggestions: [] }
+    } catch {
+      return { score: 0, analysis: result.slice(0, 200), aiLikeParts: [], suggestions: [] }
+    }
   }
 }
 

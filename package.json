@@ -27,6 +27,30 @@
     "vue": "^3.5.0",
     "vue-router": "^4.5.0"
   },
+  "build": {
+    "appId": "com.ainovel.writer",
+    "productName": "AI Novel Writer",
+    "directories": {
+      "output": "dist/package"
+    },
+    "files": [
+      "src/main/**/*",
+      "src/preload/**/*",
+      "src/shared/**/*",
+      "dist/renderer/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "extraMetadata": {
+      "main": "src/main/index.js"
+    }
+  },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.0",
     "electron": "^33.0.0",

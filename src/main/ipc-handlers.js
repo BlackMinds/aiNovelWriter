@@ -135,6 +135,9 @@ function registerIpcHandlers(ipcMain) {
 
   ipcMain.handle('project:addChapter', async (_event, volDirPath) => {
     try {
+      const volName = path.basename(volDirPath)
+      const volNum = volName.replace('vol', '').replace(/^0+/, '')
+
       const existing = fs.existsSync(volDirPath)
         ? fs.readdirSync(volDirPath).filter(f => /^ch\d+\.md$/.test(f)).sort()
         : []
@@ -143,7 +146,6 @@ function registerIpcHandlers(ipcMain) {
         : 1
       const chName = `ch${String(nextNum).padStart(3, '0')}.md`
 
-      // Try to get planned title from outline.md
       let title = ''
       const outlinePath = path.join(volDirPath, 'outline.md')
       if (fs.existsSync(outlinePath)) {
@@ -160,7 +162,7 @@ function registerIpcHandlers(ipcMain) {
         }
       }
 
-      const heading = title ? `# 第${nextNum}章 ${title}` : `# 第${nextNum}章`
+      const heading = title ? `# 第${volNum}卷 第${nextNum}章 ${title}` : `# 第${volNum}卷 第${nextNum}章`
       fileManager.createFile(path.join(volDirPath, chName), `${heading}\n\n`)
       return chName
     } catch (error) {
@@ -182,41 +184,108 @@ function registerIpcHandlers(ipcMain) {
     try {
       const win = BrowserWindow.getFocusedWindow()
 
-      // Read project name
       let projectName = path.basename(projectPath)
       const configPath = path.join(projectPath, 'project.json')
       if (fs.existsSync(configPath)) {
         try { projectName = JSON.parse(fs.readFileSync(configPath, 'utf-8')).name || projectName } catch {}
       }
 
-      const result = await dialog.showSaveDialog(win, {
-        title: '导出 TXT',
-        defaultPath: path.join(projectPath, `${projectName}.txt`),
-        filters: [{ name: '文本文件', extensions: ['txt'] }]
+      const result = await dialog.showOpenDialog(win, {
+        title: '选择导出目录',
+        defaultPath: projectPath,
+        properties: ['openDirectory', 'createDirectory']
       })
-      if (result.canceled || !result.filePath) return null
+      if (result.canceled || !result.filePaths[0]) return null
 
-      // Collect all chapters in order
+      const exportDir = path.join(result.filePaths[0], `${projectName}_导出`)
+      if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true })
+
       const volumesDir = path.join(projectPath, 'volumes')
       const volumes = fs.existsSync(volumesDir)
         ? fs.readdirSync(volumesDir).filter(d => /^vol\d+$/.test(d)).sort()
         : []
 
-      const parts = []
       for (const vol of volumes) {
+        const volNum = vol.replace('vol', '').replace(/^0+/, '')
         const volDir = path.join(volumesDir, vol)
         const chapters = fs.readdirSync(volDir)
           .filter(f => /^ch\d+\.md$/.test(f)).sort()
         for (const ch of chapters) {
+          const chNum = ch.replace('ch', '').replace('.md', '').replace(/^0+/, '')
           const content = fs.readFileSync(path.join(volDir, ch), 'utf-8')
-          parts.push(stripMarkdown(content))
+          const title = content.match(/^#\s+(.+)$/m)?.[1] || '未命名'
+          const fileName = `第${volNum}卷_第${chNum}章_${title}.txt`
+          fs.writeFileSync(path.join(exportDir, fileName), stripMarkdown(content), 'utf-8')
         }
       }
 
-      fs.writeFileSync(result.filePath, parts.join('\n\n\n'), 'utf-8')
-      return result.filePath
+      return exportDir
     } catch (error) {
       throw new Error(`导出失败: ${error.message}`)
+    }
+  })
+
+  ipcMain.handle('project:syncCheck', async (event, projectPath) => {
+    try {
+      const results = { checked: 0, synced: 0, errors: [] }
+      const volumesDir = path.join(projectPath, 'volumes')
+
+      if (!fs.existsSync(volumesDir)) {
+        throw new Error('项目目录不存在')
+      }
+
+      const volumes = fs.readdirSync(volumesDir).filter(d => /^vol\d+$/.test(d)).sort()
+
+      for (const vol of volumes) {
+        const volDir = path.join(volumesDir, vol)
+        const chapters = fs.readdirSync(volDir).filter(f => /^ch\d+\.md$/.test(f)).sort()
+
+        for (const ch of chapters) {
+          results.checked++
+          const chPath = path.join(volDir, ch)
+          const content = fs.readFileSync(chPath, 'utf-8')
+
+          if (content.length < 300) continue
+
+          const chapterNum = parseInt(ch.replace('ch', '').replace('.md', ''))
+
+          // Check outline.md
+          const outlinePath = path.join(volDir, 'outline.md')
+          const outlineContent = fs.existsSync(outlinePath) ? fs.readFileSync(outlinePath, 'utf-8') : ''
+
+          if (!outlineContent.includes(`### 第${chapterNum}章`)) {
+            try {
+              const entry = await aiService.generateChapterOutlineEntry(content, chapterNum)
+              if (entry) {
+                fs.writeFileSync(outlinePath, outlineContent + '\n\n' + entry, 'utf-8')
+                results.synced++
+              }
+            } catch (e) {
+              results.errors.push(`${vol}/${ch}: 大纲生成失败`)
+            }
+          }
+
+          // Check summary.md
+          const summaryPath = path.join(volDir, 'summary.md')
+          const summaryContent = fs.existsSync(summaryPath) ? fs.readFileSync(summaryPath, 'utf-8') : ''
+
+          if (!summaryContent.includes(`**第${chapterNum}章`)) {
+            try {
+              const summary = await aiService.summarizeChapter(content, null)
+              if (summary) {
+                await summarizer.updateVolumeSummary(projectPath, vol, ch, summary)
+                results.synced++
+              }
+            } catch (e) {
+              results.errors.push(`${vol}/${ch}: 摘要生成失败`)
+            }
+          }
+        }
+      }
+
+      return results
+    } catch (error) {
+      throw new Error(`同步检查失败: ${error.message}`)
     }
   })
 
@@ -276,6 +345,17 @@ function registerIpcHandlers(ipcMain) {
             const outlinePath = path.join(projectPath, 'volumes', volume, 'outline.md')
             const existing = fs.existsSync(outlinePath) ? fs.readFileSync(outlinePath, 'utf-8') : ''
             fs.writeFileSync(outlinePath, existing + '\n\n' + entry, 'utf-8')
+
+            const titleMatch = entry.match(/\*\*标题\*\*[：:]\s*(.+)/)
+            if (titleMatch) {
+              const title = titleMatch[1].trim()
+              const volNum = parseInt(volume.replace('vol', ''))
+              const fullTitle = `# 第${volNum}卷 第${chapterNum}章 ${title}`
+
+              const contentWithoutTitle = fullContent.replace(/^#\s+.+$/m, '').trim()
+              const updatedContent = `${fullTitle}\n\n${contentWithoutTitle}`
+              fs.writeFileSync(filePath, updatedContent, 'utf-8')
+            }
           }
 
           const contextPath = path.join(projectPath, 'context', 'current.md')
@@ -323,6 +403,17 @@ function registerIpcHandlers(ipcMain) {
             const outlinePath = path.join(projectPath, 'volumes', volume, 'outline.md')
             const existing = fs.existsSync(outlinePath) ? fs.readFileSync(outlinePath, 'utf-8') : ''
             fs.writeFileSync(outlinePath, existing + '\n\n' + entry, 'utf-8')
+
+            const titleMatch = entry.match(/\*\*标题\*\*[：:]\s*(.+)/)
+            if (titleMatch) {
+              const title = titleMatch[1].trim()
+              const volNum = parseInt(volume.replace('vol', ''))
+              const fullTitle = `# 第${volNum}卷 第${chapterNum}章 ${title}`
+
+              const contentWithoutTitle = fullContent.replace(/^#\s+.+$/m, '').trim()
+              const updatedContent = `${fullTitle}\n\n${contentWithoutTitle}`
+              fs.writeFileSync(filePath, updatedContent, 'utf-8')
+            }
           }
 
           const contextPath = path.join(projectPath, 'context', 'current.md')
@@ -359,6 +450,14 @@ function registerIpcHandlers(ipcMain) {
       return summary
     } catch (error) {
       throw new Error(`摘要生成失败: ${error.message}`)
+    }
+  })
+
+  ipcMain.handle('ai:detectAiContent', async (_event, content) => {
+    try {
+      return await aiService.detectAiContent(content)
+    } catch (error) {
+      throw new Error(`AI 检测失败: ${error.message}`)
     }
   })
 
