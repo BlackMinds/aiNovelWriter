@@ -11,7 +11,6 @@
     "build:electron": "vite build && electron-builder",
     "build:win": "vite build && electron-builder --win",
     "build:mac": "vite build && electron-builder --mac",
-    "build:linux": "vite build && electron-builder --linux"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

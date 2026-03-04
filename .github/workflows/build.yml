@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest]
 
     steps:
       - name: Checkout code
@@ -23,12 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm fakeroot dpkg
 
       - name: Install dependencies
         run: npm install
@@ -52,14 +46,15 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            windows-latest-build/*
-            macos-latest-build/*
-            ubuntu-latest-build/*
+            artifacts/windows-latest-build/*
+            artifacts/macos-latest-build/*
           draft: false
           prerelease: false
         env:
