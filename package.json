@@ -50,7 +50,8 @@
     "mac": {
       "target": ["dmg", "zip"],
       "icon": "build/icon.icns",
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "identity": null
     },
     "linux": {
       "target": ["AppImage", "deb"],
