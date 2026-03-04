@@ -50,13 +50,16 @@ jobs:
         with:
           path: artifacts
 
-      - name: Display structure
-        run: ls -R artifacts
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+          ls -la release-files
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
+          files: release-files/*
           draft: false
           prerelease: false
         env:
