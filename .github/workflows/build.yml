@@ -60,7 +60,8 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release-files
-          find artifacts -type f \( -name "*.exe" -o -name "*.zip" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) -exec cp {} release-files/ \;
+          find artifacts -type f -exec cp -v {} release-files/ \;
+          echo "=== Release files ==="
           ls -la release-files
 
       - name: Create Release
