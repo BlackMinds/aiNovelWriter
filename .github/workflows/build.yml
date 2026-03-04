@@ -40,7 +40,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-build
-          path: dist/package/
+          path: |
+            dist/package/*.exe
+            dist/package/*.zip
+            dist/package/*.blockmap
+            dist/package/*.yml
           if-no-files-found: warn
 
   release:
