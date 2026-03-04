@@ -33,6 +33,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      - name: List build output
+        run: |
+          echo "=== Build output directory ==="
+          ls -laR dist/package || echo "dist/package does not exist"
+          echo "=== All dist contents ==="
+          ls -laR dist || echo "dist does not exist"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
