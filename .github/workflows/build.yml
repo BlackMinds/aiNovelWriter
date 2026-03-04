@@ -50,10 +50,17 @@ jobs:
         with:
           path: artifacts
 
+      - name: Display artifacts structure
+        run: |
+          echo "=== Artifacts directory structure ==="
+          ls -laR artifacts
+          echo "=== Finding all files ==="
+          find artifacts -type f
+
       - name: Prepare release files
         run: |
           mkdir -p release-files
-          find artifacts -type f -exec cp {} release-files/ \;
+          find artifacts -type f \( -name "*.exe" -o -name "*.zip" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) -exec cp {} release-files/ \;
           ls -la release-files
 
       - name: Create Release
