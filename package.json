@@ -8,7 +8,10 @@
     "build": "vite build",
     "start": "electron .",
     "dev:electron": "node scripts/dev.js",
-    "build:electron": "vite build && electron-builder"
+    "build:electron": "vite build && electron-builder",
+    "build:win": "vite build && electron-builder --win",
+    "build:mac": "vite build && electron-builder --mac",
+    "build:linux": "vite build && electron-builder --linux"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -41,7 +44,18 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis"
+      "target": ["nsis", "zip"],
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "build/icon.png",
+      "category": "Office"
     },
     "nsis": {
       "oneClick": false,
