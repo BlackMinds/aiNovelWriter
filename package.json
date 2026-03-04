@@ -10,7 +10,7 @@
     "dev:electron": "node scripts/dev.js",
     "build:electron": "vite build && electron-builder",
     "build:win": "vite build && electron-builder --win",
-    "build:mac": "vite build && electron-builder --mac",
+    "build:mac": "vite build && electron-builder --mac"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
