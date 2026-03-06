@@ -23,6 +23,7 @@
     "@google/genai": "^1.43.0",
     "codemirror": "^6.0.1",
     "element-plus": "^2.9.1",
+    "epub-gen": "^0.1.0",
     "marked": "^15.0.0",
     "pinia": "^2.3.0",
     "undici": "^7.22.0",
@@ -51,7 +52,10 @@
       "icon": "build/icon.ico"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "identity": null

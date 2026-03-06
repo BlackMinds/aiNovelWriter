@@ -1,5 +1,9 @@
 <template>
   <div class="home-page">
+    <el-button class="theme-toggle" circle @click="settingsStore.toggleTheme()">
+      <el-icon><Sunny v-if="settingsStore.theme === 'dark'" /><Moon v-else /></el-icon>
+    </el-button>
+
     <div class="hero-section">
       <h1 class="title">AI Novel Writer</h1>
       <p class="subtitle">AI 驱动的长篇小说写作工具</p>
@@ -54,6 +58,22 @@
           </template>
         </el-input>
         <span v-if="aiStore.apiKeySet" class="key-status">API Key 已设置</span>
+
+        <div class="editor-settings">
+          <el-select v-model="settingsStore.editorFontSize" size="small" style="width: 120px">
+            <el-option label="12px" :value="12" />
+            <el-option label="14px" :value="14" />
+            <el-option label="16px" :value="16" />
+            <el-option label="18px" :value="18" />
+            <el-option label="20px" :value="20" />
+          </el-select>
+          <el-select v-model="settingsStore.editorFontFamily" size="small" style="width: 150px">
+            <el-option label="等宽字体" value="monospace" />
+            <el-option label="微软雅黑" value="'Microsoft YaHei', sans-serif" />
+            <el-option label="宋体" value="SimSun, serif" />
+            <el-option label="黑体" value="SimHei, sans-serif" />
+          </el-select>
+        </div>
       </div>
     </div>
 
@@ -76,12 +96,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '../stores/project.js'
 import { useAiStore } from '../stores/ai.js'
+import { useSettingsStore } from '../stores/settings.js'
 import ProjectCard from '../components/ProjectCard.vue'
-import { Plus, FolderOpened, Key, View, Hide } from '@element-plus/icons-vue'
+import { Plus, FolderOpened, Key, View, Hide, Sunny, Moon } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
 const aiStore = useAiStore()
+const settingsStore = useSettingsStore()
 
 const apiKeyInput = ref('')
 const showKey = ref(false)
@@ -182,6 +204,14 @@ async function handleOpenProject(project) {
   align-items: center;
   padding: 60px 40px 40px;
   overflow-y: auto;
+  position: relative;
+}
+
+.theme-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
 }
 
 .hero-section {
@@ -234,6 +264,12 @@ async function handleOpenProject(project) {
 .key-status {
   color: var(--success);
   font-size: 12px;
+}
+
+.editor-settings {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .recent-section {

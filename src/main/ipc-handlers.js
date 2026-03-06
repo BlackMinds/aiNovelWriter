@@ -225,8 +225,75 @@ function registerIpcHandlers(ipcMain) {
     }
   })
 
+  ipcMain.handle('project:exportEpub', async (event, projectPath) => {
+    try {
+      const win = BrowserWindow.getFocusedWindow()
+
+      let projectName = path.basename(projectPath)
+      let genre = ''
+      const configPath = path.join(projectPath, 'project.json')
+      if (fs.existsSync(configPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+          projectName = config.name || projectName
+          genre = config.genre || ''
+        } catch {}
+      }
+
+      const result = await dialog.showSaveDialog(win, {
+        title: '保存 EPUB 文件',
+        defaultPath: `${projectName}.epub`,
+        filters: [{ name: 'EPUB', extensions: ['epub'] }]
+      })
+      if (result.canceled || !result.filePath) return null
+
+      const volumesDir = path.join(projectPath, 'volumes')
+      const volumes = fs.existsSync(volumesDir)
+        ? fs.readdirSync(volumesDir).filter(d => /^vol\d+$/.test(d)).sort()
+        : []
+
+      const chapters = []
+      for (const vol of volumes) {
+        const volDir = path.join(volumesDir, vol)
+        const chFiles = fs.readdirSync(volDir).filter(f => /^ch\d+\.md$/.test(f)).sort()
+        for (const ch of chFiles) {
+          const content = fs.readFileSync(path.join(volDir, ch), 'utf-8')
+          const title = content.match(/^#\s+(.+)$/m)?.[1] || '未命名'
+          const body = content.replace(/^#\s+.+$/m, '').trim()
+          chapters.push({ title, data: body })
+        }
+      }
+
+      const option = {
+        title: projectName,
+        author: 'AI Novel Writer',
+        content: chapters,
+        description: genre || '网络小说'
+      }
+
+      // 尝试不同的导入方式
+      let epubGen
+      try {
+        epubGen = require('epub-gen')
+      } catch {
+        try {
+          const pkg = require('epub-gen-memory')
+          epubGen = pkg.default || pkg
+        } catch {
+          throw new Error('未找到 EPUB 生成库，请运行: npm install epub-gen')
+        }
+      }
+
+      await new epubGen(option, result.filePath).promise
+      return result.filePath
+    } catch (error) {
+      throw new Error(`导出 EPUB 失败: ${error.message}`)
+    }
+  })
+
   ipcMain.handle('project:syncCheck', async (event, projectPath) => {
     try {
+      const webContents = event.sender
       const results = { checked: 0, synced: 0, errors: [] }
       const volumesDir = path.join(projectPath, 'volumes')
 
@@ -236,51 +303,72 @@ function registerIpcHandlers(ipcMain) {
 
       const volumes = fs.readdirSync(volumesDir).filter(d => /^vol\d+$/.test(d)).sort()
 
+      // 收集所有需要处理的章节
+      const tasks = []
       for (const vol of volumes) {
         const volDir = path.join(volumesDir, vol)
         const chapters = fs.readdirSync(volDir).filter(f => /^ch\d+\.md$/.test(f)).sort()
 
         for (const ch of chapters) {
-          results.checked++
           const chPath = path.join(volDir, ch)
           const content = fs.readFileSync(chPath, 'utf-8')
 
           if (content.length < 300) continue
 
           const chapterNum = parseInt(ch.replace('ch', '').replace('.md', ''))
-
-          // Check outline.md
           const outlinePath = path.join(volDir, 'outline.md')
-          const outlineContent = fs.existsSync(outlinePath) ? fs.readFileSync(outlinePath, 'utf-8') : ''
+          const summaryPath = path.join(volDir, 'summary.md')
 
-          if (!outlineContent.includes(`### 第${chapterNum}章`)) {
-            try {
+          tasks.push({ vol, ch, chPath, content, chapterNum, outlinePath, summaryPath })
+        }
+      }
+
+      results.checked = tasks.length
+
+      // 发送总数
+      if (!webContents.isDestroyed()) {
+        webContents.send('sync:progress', { current: 0, total: tasks.length })
+      }
+
+      // 并行处理（限制并发数为3）
+      const concurrency = 3
+      let completed = 0
+
+      for (let i = 0; i < tasks.length; i += concurrency) {
+        const batch = tasks.slice(i, i + concurrency)
+
+        await Promise.all(batch.map(async (task) => {
+          try {
+            const { vol, ch, content, chapterNum, outlinePath, summaryPath } = task
+
+            // 检查大纲
+            const outlineContent = fs.existsSync(outlinePath) ? fs.readFileSync(outlinePath, 'utf-8') : ''
+            if (!outlineContent.includes(`### 第${chapterNum}章`)) {
               const entry = await aiService.generateChapterOutlineEntry(content, chapterNum)
               if (entry) {
                 fs.writeFileSync(outlinePath, outlineContent + '\n\n' + entry, 'utf-8')
                 results.synced++
               }
-            } catch (e) {
-              results.errors.push(`${vol}/${ch}: 大纲生成失败`)
             }
-          }
 
-          // Check summary.md
-          const summaryPath = path.join(volDir, 'summary.md')
-          const summaryContent = fs.existsSync(summaryPath) ? fs.readFileSync(summaryPath, 'utf-8') : ''
-
-          if (!summaryContent.includes(`**第${chapterNum}章`)) {
-            try {
+            // 检查摘要
+            const summaryContent = fs.existsSync(summaryPath) ? fs.readFileSync(summaryPath, 'utf-8') : ''
+            if (!summaryContent.includes(`### 第${chapterNum}章 摘要`)) {
               const summary = await aiService.summarizeChapter(content, null)
               if (summary) {
                 await summarizer.updateVolumeSummary(projectPath, vol, ch, summary)
                 results.synced++
               }
-            } catch (e) {
-              results.errors.push(`${vol}/${ch}: 摘要生成失败`)
             }
+          } catch (e) {
+            results.errors.push(`${task.vol}/${task.ch}: ${e.message}`)
           }
-        }
+
+          completed++
+          if (!webContents.isDestroyed()) {
+            webContents.send('sync:progress', { current: completed, total: tasks.length })
+          }
+        }))
       }
 
       return results
@@ -467,6 +555,15 @@ function registerIpcHandlers(ipcMain) {
       return await aiService.customPrompt(options, webContents)
     } catch (error) {
       throw new Error(`AI 调用失败: ${error.message}`)
+    }
+  })
+
+  ipcMain.handle('ai:polishText', async (event, text) => {
+    try {
+      const webContents = event.sender
+      return await aiService.polishText(text, webContents)
+    } catch (error) {
+      throw new Error(`AI 润色失败: ${error.message}`)
     }
   })
 }

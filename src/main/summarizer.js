@@ -23,10 +23,15 @@ class Summarizer {
       existing = fs.readFileSync(summaryPath, 'utf-8')
     }
 
-    // Append chapter summary
-    const chapterNum = chapterName.replace('ch', '').replace('.md', '')
-    const updatedSummary = `${existing}\n\n### 第${parseInt(chapterNum)}章 摘要\n${chapterSummary}`
+    const chapterNum = parseInt(chapterName.replace('ch', '').replace('.md', ''))
+    const marker = `### 第${chapterNum}章 摘要`
 
+    // 检查是否已存在，避免重复添加
+    if (existing.includes(marker)) {
+      return existing
+    }
+
+    const updatedSummary = `${existing}\n\n${marker}\n${chapterSummary}`
     fs.writeFileSync(summaryPath, updatedSummary, 'utf-8')
     return updatedSummary
   }

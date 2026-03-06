@@ -5,11 +5,14 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from '@codemirror/view'
-import { EditorState } from '@codemirror/state'
+import { EditorState, Compartment } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
+import { useSettingsStore } from '../stores/settings.js'
+
+const settingsStore = useSettingsStore()
 
 const props = defineProps({
   content: { type: String, default: '' }
@@ -20,6 +23,35 @@ const emit = defineEmits(['update'])
 const editorContainer = ref(null)
 let editorView = null
 let isExternalUpdate = false
+const themeCompartment = new Compartment()
+
+function getEditorTheme() {
+  return EditorView.theme({
+    '&': {
+      height: '100%',
+      fontSize: `${settingsStore.editorFontSize}px`
+    },
+    '.cm-scroller': {
+      fontFamily: settingsStore.editorFontFamily,
+      lineHeight: '1.8',
+      padding: '12px 0'
+    },
+    '.cm-content': {
+      padding: '0 24px'
+    },
+    '.cm-gutters': {
+      backgroundColor: 'var(--bg-secondary)',
+      borderRight: '1px solid var(--border-color)',
+      color: 'var(--text-secondary)'
+    },
+    '.cm-activeLine': {
+      backgroundColor: 'rgba(233, 69, 96, 0.05)'
+    },
+    '.cm-activeLineGutter': {
+      backgroundColor: 'rgba(233, 69, 96, 0.1)'
+    }
+  })
+}
 
 function createEditor() {
   if (!editorContainer.value) return
@@ -43,31 +75,7 @@ function createEditor() {
       keymap.of([...defaultKeymap, ...historyKeymap]),
       updateListener,
       EditorView.lineWrapping,
-      EditorView.theme({
-        '&': {
-          height: '100%',
-          fontSize: '15px'
-        },
-        '.cm-scroller': {
-          fontFamily: "'Cascadia Code', 'Microsoft YaHei', monospace",
-          lineHeight: '1.8',
-          padding: '12px 0'
-        },
-        '.cm-content': {
-          padding: '0 24px'
-        },
-        '.cm-gutters': {
-          backgroundColor: 'var(--bg-secondary)',
-          borderRight: '1px solid var(--border-color)',
-          color: 'var(--text-secondary)'
-        },
-        '.cm-activeLine': {
-          backgroundColor: 'rgba(233, 69, 96, 0.05)'
-        },
-        '.cm-activeLineGutter': {
-          backgroundColor: 'rgba(233, 69, 96, 0.1)'
-        }
-      })
+      themeCompartment.of(getEditorTheme())
     ]
   })
 
@@ -76,6 +84,14 @@ function createEditor() {
     parent: editorContainer.value
   })
 }
+
+watch([() => settingsStore.editorFontSize, () => settingsStore.editorFontFamily], () => {
+  if (editorView) {
+    editorView.dispatch({
+      effects: themeCompartment.reconfigure(getEditorTheme())
+    })
+  }
+})
 
 onMounted(() => {
   createEditor()

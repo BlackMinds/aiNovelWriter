@@ -408,6 +408,19 @@ ${content.slice(0, 3000)}`
       return { score: 0, analysis: result.slice(0, 200), aiLikeParts: [], suggestions: [] }
     }
   }
+
+  async polishText(text, webContents) {
+    const systemPrompt = '你是一位专业的中文网络小说编辑。请优化给定文本的文笔，使其更加流畅、生动、富有感染力。保持原意和风格，只优化表达方式。'
+
+    const messages = [
+      {
+        role: 'user',
+        content: `请优化以下文本的文笔：\n\n${text}`
+      }
+    ]
+
+    return this.streamChat(systemPrompt, messages, webContents)
+  }
 }
 
 module.exports = new AiService()

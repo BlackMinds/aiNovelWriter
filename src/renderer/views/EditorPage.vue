@@ -18,6 +18,9 @@
         <el-button text :disabled="!isChapterFile" @click="continueWriting">
           <el-icon><EditPen /></el-icon> 续写
         </el-button>
+        <el-button text :disabled="!projectStore.currentContent" @click="handlePolish">
+          <el-icon><Edit /></el-icon> 优化文笔
+        </el-button>
         <el-button text :disabled="!projectStore.currentContent" @click="detectAi">
           <el-icon><View /></el-icon> AI 检测
         </el-button>
@@ -27,7 +30,10 @@
           <el-icon><Refresh /></el-icon> 同步检查
         </el-button>
         <el-button text @click="handleExport">
-          <el-icon><Download /></el-icon> 导出
+          <el-icon><Download /></el-icon> 导出TXT
+        </el-button>
+        <el-button text @click="handleExportEpub">
+          <el-icon><Reading /></el-icon> 导出EPUB
         </el-button>
         <el-button text @click="togglePreview">
           <el-icon><View /></el-icon> {{ showPreview ? '编辑' : '预览' }}
@@ -107,7 +113,7 @@ import AiPanel from '../components/AiPanel.vue'
 import StatusBar from '../components/StatusBar.vue'
 import {
   HomeFilled, DocumentChecked, MagicStick, EditPen,
-  Document, View, ChatDotRound, Download, Refresh
+  Document, View, ChatDotRound, Download, Refresh, Reading
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -351,6 +357,18 @@ async function handleExport() {
   }
 }
 
+async function handleExportEpub() {
+  const { ElMessage } = await import('element-plus')
+  try {
+    const filePath = await window.electronAPI.exportEpub(projectStore.projectPath)
+    if (filePath) {
+      ElMessage({ message: `EPUB 已导出到 ${filePath}`, type: 'success', duration: 4000 })
+    }
+  } catch (e) {
+    ElMessage({ message: `导出 EPUB 失败: ${e.message}`, type: 'error' })
+  }
+}
+
 async function handleAddChapter(volNode) {
   try {
     await window.electronAPI.addChapter(volNode.path)
@@ -407,13 +425,46 @@ async function detectAi() {
   }
 }
 
-async function handleSyncCheck() {
-  const { ElLoading, ElMessage } = await import('element-plus')
-  const loading = ElLoading.service({ text: '检查同步中...' })
+async function handlePolish() {
+  const { ElMessageBox, ElMessage } = await import('element-plus')
 
   try {
+    const { value: text } = await ElMessageBox.prompt('请输入要优化的文本', '优化文笔', {
+      confirmButtonText: '开始优化',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '粘贴要优化的文本...'
+    })
+
+    if (!text) return
+
+    aiStore.startStream()
+    await window.electronAPI.polishText(text)
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(`润色失败: ${e.message}`)
+    }
+  }
+}
+
+async function handleSyncCheck() {
+  const { ElLoading, ElMessage } = await import('element-plus')
+  let loading = null
+  let cleanupProgress = null
+
+  try {
+    loading = ElLoading.service({ text: '检查同步中... 0/0' })
+
+    cleanupProgress = window.electronAPI.onSyncProgress((data) => {
+      if (loading) {
+        loading.setText(`检查同步中... ${data.current}/${data.total}`)
+      }
+    })
+
     const result = await window.electronAPI.syncCheck(projectStore.projectPath)
-    loading.close()
+
+    if (cleanupProgress) cleanupProgress()
+    if (loading) loading.close()
 
     if (result.errors.length > 0) {
       ElMessage.warning(`检查完成：${result.checked} 个章节，同步 ${result.synced} 个，${result.errors.length} 个失败`)
@@ -423,7 +474,8 @@ async function handleSyncCheck() {
       ElMessage.info(`检查完成：${result.checked} 个章节，全部已同步`)
     }
   } catch (e) {
-    loading.close()
+    if (cleanupProgress) cleanupProgress()
+    if (loading) loading.close()
     ElMessage.error(`同步检查失败: ${e.message}`)
   }
 }

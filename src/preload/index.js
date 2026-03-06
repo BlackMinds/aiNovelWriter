@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   importProject: () => ipcRenderer.invoke('project:import'),
   selectDir: () => ipcRenderer.invoke('dialog:selectDir'),
   exportTxt: (projectPath) => ipcRenderer.invoke('project:exportTxt', projectPath),
+  exportEpub: (projectPath) => ipcRenderer.invoke('project:exportEpub', projectPath),
   syncCheck: (projectPath) => ipcRenderer.invoke('project:syncCheck', projectPath),
 
   // AI operations
@@ -32,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getModel: () => ipcRenderer.invoke('ai:getModel'),
   getAvailableModels: () => ipcRenderer.invoke('ai:getAvailableModels'),
   detectAiContent: (content) => ipcRenderer.invoke('ai:detectAiContent', content),
+  polishText: (text) => ipcRenderer.invoke('ai:polishText', text),
 
   // AI streaming listeners
   onStreamChunk: (callback) => {
@@ -53,5 +55,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event, msg) => callback(msg)
     ipcRenderer.on('ai:background-done', handler)
     return () => ipcRenderer.removeListener('ai:background-done', handler)
+  },
+  onSyncProgress: (callback) => {
+    const handler = (_event, data) => callback(data)
+    ipcRenderer.on('sync:progress', handler)
+    return () => ipcRenderer.removeListener('sync:progress', handler)
   },
 })
