@@ -51,9 +51,7 @@
       "icon": "build/icon.ico"
     },
     "mac": {
-      "target": [
-        "zip"
-      ],
+      "target": ["dmg", "zip"],
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "identity": null
