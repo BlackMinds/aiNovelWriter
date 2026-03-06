@@ -1,25 +1,46 @@
 const { GoogleGenAI } = require('@google/genai')
 
 const MODELS = {
-  'gemini-2.5-pro': 'gemini-2.5-pro',
-  'gemini-2.5-flash': 'gemini-2.5-flash'
+  'gemini-2.5-pro': { provider: 'gemini', model: 'gemini-2.5-pro' },
+  'gemini-2.5-flash': { provider: 'gemini', model: 'gemini-2.5-flash' },
+  'gemini-3.1-pro-preview': { provider: 'gemini', model: 'gemini-3.1-pro-preview' },
+  'gemini-3-flash-preview': { provider: 'gemini', model: 'gemini-3-flash-preview' },
+  'glm-5': { provider: 'glm', model: 'glm-5' },
+  'glm-5-plus': { provider: 'glm', model: 'glm-5-plus' },
+  'glm-5-flash': { provider: 'glm', model: 'glm-5-flash' },
+  'glm-5-air': { provider: 'glm', model: 'glm-5-air' }
 }
 
 class AiService {
   constructor() {
-    this.client = null
-    this.apiKey = '手工输入'
+    this.geminiClient = null
+    this.geminiApiKey = '手工输入'
+    this.glmApiKey = ''
     this.model = 'gemini-2.5-flash'
-    this.setApiKey(this.apiKey)
+    this.setGeminiApiKey(this.geminiApiKey)
   }
 
-  setApiKey(key) {
-    this.apiKey = key
-    this.client = new GoogleGenAI({ apiKey: key })
+  setGeminiApiKey(key) {
+    this.geminiApiKey = key
+    this.geminiClient = new GoogleGenAI({ apiKey: key })
+  }
+
+  setGlmApiKey(key) {
+    this.glmApiKey = key
   }
 
   getApiKey() {
-    return this.apiKey
+    const provider = MODELS[this.model]?.provider
+    return provider === 'glm' ? this.glmApiKey : this.geminiApiKey
+  }
+
+  setApiKey(key) {
+    const provider = MODELS[this.model]?.provider
+    if (provider === 'glm') {
+      this.setGlmApiKey(key)
+    } else {
+      this.setGeminiApiKey(key)
+    }
   }
 
   setModel(model) {
@@ -37,26 +58,50 @@ class AiService {
   }
 
   _ensureClient() {
-    if (!this.client) {
-      throw new Error('请先设置 API Key')
+    const provider = MODELS[this.model]?.provider
+    if (provider === 'glm') {
+      if (!this.glmApiKey) {
+        throw new Error('请先设置 GLM API Key')
+      }
+    } else {
+      if (!this.geminiClient) {
+        throw new Error('请先设置 Gemini API Key')
+      }
     }
   }
 
   // 将 Anthropic 格式的 messages 转为 Gemini 格式
-  _convertMessages(messages) {
+  _convertMessagesForGemini(messages) {
     return messages.map(msg => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content }]
     }))
   }
 
+  // 将 messages 转为 OpenAI 格式（GLM 兼容）
+  _convertMessagesForGLM(messages) {
+    return messages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }))
+  }
+
   async streamChat(systemPrompt, messages, webContents) {
     this._ensureClient()
+    const provider = MODELS[this.model]?.provider
 
+    if (provider === 'glm') {
+      return this._streamChatGLM(systemPrompt, messages, webContents)
+    } else {
+      return this._streamChatGemini(systemPrompt, messages, webContents)
+    }
+  }
+
+  async _streamChatGemini(systemPrompt, messages, webContents) {
     try {
-      const stream = await this.client.models.generateContentStream({
-        model: this.model,
-        contents: this._convertMessages(messages),
+      const stream = await this.geminiClient.models.generateContentStream({
+        model: MODELS[this.model].model,
+        contents: this._convertMessagesForGemini(messages),
         config: {
           systemInstruction: systemPrompt,
           maxOutputTokens: 16000,
@@ -74,6 +119,78 @@ class AiService {
           fullContent += text
           if (webContents && !webContents.isDestroyed()) {
             webContents.send('ai:stream-chunk', text)
+          }
+        }
+      }
+
+      if (webContents && !webContents.isDestroyed()) {
+        webContents.send('ai:stream-end', fullContent)
+      }
+
+      return fullContent
+    } catch (error) {
+      const errMsg = error.message || '未知错误'
+      if (webContents && !webContents.isDestroyed()) {
+        webContents.send('ai:stream-error', errMsg)
+      }
+      throw error
+    }
+  }
+
+  async _streamChatGLM(systemPrompt, messages, webContents) {
+    try {
+      const glmMessages = [
+        { role: 'system', content: systemPrompt },
+        ...this._convertMessagesForGLM(messages)
+      ]
+
+      const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.glmApiKey}`
+        },
+        body: JSON.stringify({
+          model: MODELS[this.model].model,
+          messages: glmMessages,
+          stream: true,
+          temperature: 0.95,
+          top_p: 0.7
+        })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('GLM API 错误响应:', errorText)
+        throw new Error(`GLM API 错误: ${response.status} - ${errorText}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n').filter(line => line.trim().startsWith('data:'))
+
+        for (const line of lines) {
+          const data = line.replace(/^data:\s*/, '')
+          if (data === '[DONE]') continue
+
+          try {
+            const json = JSON.parse(data)
+            const text = json.choices[0]?.delta?.content || ''
+            if (text) {
+              fullContent += text
+              if (webContents && !webContents.isDestroyed()) {
+                webContents.send('ai:stream-chunk', text)
+              }
+            }
+          } catch (e) {
+            // 忽略解析错误
           }
         }
       }

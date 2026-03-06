@@ -15,11 +15,31 @@
         </el-button>
       </div>
 
-      <div class="api-key-section">
+      <div class="ai-config-section">
+        <el-select
+          v-model="selectedModel"
+          placeholder="选择 AI 模型"
+          class="model-select"
+          @change="saveModel"
+        >
+          <el-option-group label="Google Gemini">
+            <el-option label="Gemini 2.5 Pro" value="gemini-2.5-pro" />
+            <el-option label="Gemini 2.5 Flash" value="gemini-2.5-flash" />
+            <el-option label="Gemini 3.1 Pro Preview" value="gemini-3.1-pro-preview" />
+            <el-option label="Gemini 3 Flash Preview" value="gemini-3-flash-preview" />
+          </el-option-group>
+          <el-option-group label="智谱 GLM">
+            <el-option label="GLM-5" value="glm-5" />
+            <el-option label="GLM-5 Plus" value="glm-5-plus" />
+            <el-option label="GLM-5 Flash" value="glm-5-flash" />
+            <el-option label="GLM-5 Air" value="glm-5-air" />
+          </el-option-group>
+        </el-select>
+
         <el-input
           v-model="apiKeyInput"
           :type="showKey ? 'text' : 'password'"
-          placeholder="输入 Claude API Key"
+          :placeholder="apiKeyPlaceholder"
           class="api-key-input"
           @change="saveApiKey"
         >
@@ -52,7 +72,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '../stores/project.js'
 import { useAiStore } from '../stores/ai.js'
@@ -65,6 +85,13 @@ const aiStore = useAiStore()
 
 const apiKeyInput = ref('')
 const showKey = ref(false)
+const selectedModel = ref('gemini-2.5-flash')
+
+const apiKeyPlaceholder = computed(() => {
+  return selectedModel.value.startsWith('glm')
+    ? '输入智谱 GLM API Key'
+    : '输入 Google Gemini API Key'
+})
 
 onMounted(async () => {
   try {
@@ -72,6 +99,16 @@ onMounted(async () => {
     projectStore.setRecentProjects(projects)
   } catch (e) {
     console.error('Failed to load recent projects:', e)
+  }
+
+  try {
+    const model = await window.electronAPI.getModel()
+    if (model) {
+      selectedModel.value = model
+      aiStore.selectedModel = model
+    }
+  } catch (e) {
+    console.error('Failed to load model:', e)
   }
 
   try {
@@ -89,6 +126,22 @@ async function saveApiKey() {
   if (apiKeyInput.value) {
     await window.electronAPI.setApiKey(apiKeyInput.value)
     aiStore.apiKeySet = true
+  }
+}
+
+async function saveModel() {
+  await window.electronAPI.setModel(selectedModel.value)
+  aiStore.selectedModel = selectedModel.value
+  apiKeyInput.value = ''
+  aiStore.apiKeySet = false
+  try {
+    const key = await window.electronAPI.getApiKey()
+    if (key) {
+      apiKeyInput.value = key
+      aiStore.apiKeySet = true
+    }
+  } catch (e) {
+    console.error('Failed to load API key:', e)
   }
 }
 
@@ -163,11 +216,15 @@ async function handleOpenProject(project) {
   font-size: 16px;
 }
 
-.api-key-section {
+.ai-config-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+}
+
+.model-select {
+  width: 400px;
 }
 
 .api-key-input {

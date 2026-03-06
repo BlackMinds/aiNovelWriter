@@ -2,15 +2,6 @@
   <div class="ai-panel">
     <div class="panel-header">
       <span class="panel-title">AI 助手</span>
-      <el-select
-        v-model="aiStore.selectedModel"
-        size="small"
-        class="model-select"
-        @change="onModelChange"
-      >
-        <el-option label="Gemini 2.5 Pro" value="gemini-2.5-pro" />
-        <el-option label="Gemini 2.5 Flash" value="gemini-2.5-flash" />
-      </el-select>
     </div>
 
     <!-- Quick Actions -->
