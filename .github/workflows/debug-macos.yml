@@ -1,0 +1,302 @@
+name: Debug macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_level:
+        description: '调试级别'
+        required: true
+        type: choice
+        default: 'full'
+        options:
+          - quick      # 快速构建测试
+          - full       # 完整诊断
+          - launch     # 构建+启动测试
+      auto_fix:
+        description: '自动修复常见问题'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  debug-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ===== 系统信息收集 =====
+      - name: 收集系统信息
+        run: |
+          echo "========== 系统信息 =========="
+          sw_vers
+          echo ""
+          echo "========== Xcode 信息 =========="
+          xcodebuild -version || echo "Xcode not found"
+          echo ""
+          echo "========== Node/npm 版本 =========="
+          node --version
+          npm --version
+          echo ""
+          echo "========== 可用架构 =========="
+          uname -m
+          sysctl -n machdep.cpu.brand_string
+
+      # ===== 依赖安装 =====
+      - name: 安装依赖
+        run: |
+          echo "========== 安装依赖 =========="
+          npm install
+          echo ""
+          echo "========== Electron 版本 =========="
+          npx electron --version
+          echo ""
+          echo "========== 检查 native 模块 =========="
+          npm list --depth=0 | grep -E "(native|node-gyp|rebuild)" || echo "No native modules detected"
+
+      # ===== 自动修复常见问题 =====
+      - name: 自动修复 - 添加错误日志
+        if: inputs.auto_fix == true
+        run: |
+          echo "========== 添加 electron-log =========="
+          npm install electron-log --save
+          echo "✓ electron-log 已安装"
+
+      - name: 自动修复 - 更新 macOS 构建配置
+        if: inputs.auto_fix == true
+        run: |
+          echo "========== 检查并优化 electron-builder 配置 =========="
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+
+          // 确保 macOS 配置完整
+          if (!pkg.build.mac.hardenedRuntime) {
+            pkg.build.mac.hardenedRuntime = true;
+            console.log('✓ 添加 hardenedRuntime');
+          }
+          if (!pkg.build.mac.gatekeeperAssess) {
+            pkg.build.mac.gatekeeperAssess = false;
+            console.log('✓ 禁用 gatekeeperAssess');
+          }
+          if (!pkg.build.mac.entitlements) {
+            pkg.build.mac.entitlements = 'build/entitlements.mac.plist';
+            console.log('✓ 添加 entitlements 配置');
+          }
+          if (!pkg.build.mac.entitlementsInherit) {
+            pkg.build.mac.entitlementsInherit = 'build/entitlements.mac.plist';
+            console.log('✓ 添加 entitlementsInherit 配置');
+          }
+
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          console.log('✓ package.json 已更新');
+          "
+
+      - name: 自动修复 - 创建 entitlements 文件
+        if: inputs.auto_fix == true
+        run: |
+          echo "========== 创建 entitlements.mac.plist =========="
+          mkdir -p build
+          cat > build/entitlements.mac.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+            <dict>
+              <key>com.apple.security.cs.allow-jit</key>
+              <true/>
+              <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+              <true/>
+              <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+              <true/>
+              <key>com.apple.security.network.client</key>
+              <true/>
+              <key>com.apple.security.network.server</key>
+              <true/>
+              <key>com.apple.security.files.user-selected.read-write</key>
+              <true/>
+            </dict>
+          </plist>
+          EOF
+          echo "✓ entitlements.mac.plist 已创建"
+          cat build/entitlements.mac.plist
+
+      # ===== 构建应用 =====
+      - name: 构建应用（详细日志）
+        run: |
+          echo "========== 开始构建 =========="
+          DEBUG=electron-builder npm run build:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          DEBUG: electron-builder
+
+      # ===== 构建产物检查 =====
+      - name: 检查构建产物
+        run: |
+          echo "========== 构建产物目录结构 =========="
+          ls -lah dist/package/ || echo "dist/package/ 不存在"
+          echo ""
+          echo "========== DMG 文件信息 =========="
+          find dist/package -name "*.dmg" -exec file {} \; || echo "未找到 DMG 文件"
+          find dist/package -name "*.dmg" -exec ls -lh {} \; || echo "未找到 DMG 文件"
+          echo ""
+          echo "========== ZIP 文件信息 =========="
+          find dist/package -name "*.zip" -exec ls -lh {} \; || echo "未找到 ZIP 文件"
+          echo ""
+          echo "========== App bundle 结构 =========="
+          find dist/package -name "*.app" -type d | head -1 | xargs -I {} sh -c 'echo "App: {}"; ls -la "{}/Contents/"' || echo "未找到 .app"
+          echo ""
+          echo "========== 可执行文件信息 =========="
+          find dist/package -name "*.app" -type d | head -1 | xargs -I {} sh -c 'file "{}/Contents/MacOS/"*' || echo "未找到可执行文件"
+          find dist/package -name "*.app" -type d | head -1 | xargs -I {} sh -c 'lipo -info "{}/Contents/MacOS/"* 2>/dev/null' || echo "无法获取架构信息"
+
+      # ===== 完整诊断 =====
+      - name: 完整诊断信息
+        if: inputs.test_level == 'full'
+        run: |
+          echo "========== Info.plist 内容 =========="
+          find dist/package -name "*.app" -type d | head -1 | xargs -I {} cat "{}/Contents/Info.plist" || echo "未找到 Info.plist"
+          echo ""
+          echo "========== 代码签名信息 =========="
+          find dist/package -name "*.app" -type d | head -1 | xargs -I {} codesign -dv --verbose=4 {} 2>&1 || echo "未签名或签名失败"
+          echo ""
+          echo "========== Entitlements 信息 =========="
+          find dist/package -name "*.app" -type d | head -1 | xargs -I {} codesign -d --entitlements - {} 2>&1 || echo "无 entitlements"
+          echo ""
+          echo "========== 依赖库检查 =========="
+          find dist/package -name "*.app" -type d | head -1 | xargs -I {} sh -c 'otool -L "{}/Contents/MacOS/"* | head -20' || echo "无法检查依赖"
+          echo ""
+          echo "========== Frameworks 目录 =========="
+          find dist/package -name "*.app" -type d | head -1 | xargs -I {} ls -la "{}/Contents/Frameworks/" || echo "无 Frameworks"
+
+      # ===== 启动测试 =====
+      - name: 应用启动测试
+        if: inputs.test_level == 'launch' || inputs.test_level == 'full'
+        timeout-minutes: 3
+        continue-on-error: true
+        run: |
+          echo "========== 挂载 DMG =========="
+          DMG_FILE=$(find dist/package -name "*.dmg" | head -1)
+          if [ -z "$DMG_FILE" ]; then
+            echo "❌ 未找到 DMG 文件"
+            exit 1
+          fi
+          echo "DMG: $DMG_FILE"
+
+          hdiutil attach "$DMG_FILE" -mountpoint /Volumes/TestApp -nobrowse
+          sleep 2
+
+          echo ""
+          echo "========== 挂载点内容 =========="
+          ls -la /Volumes/TestApp/
+
+          echo ""
+          echo "========== 尝试启动应用 =========="
+          APP_PATH=$(find /Volumes/TestApp -name "*.app" -type d | head -1)
+          echo "App path: $APP_PATH"
+
+          # 启动应用（后台）
+          open "$APP_PATH" --args --no-sandbox &
+          APP_PID=$!
+
+          echo "等待应用启动..."
+          sleep 5
+
+          echo ""
+          echo "========== 检查进程 =========="
+          ps aux | grep -i "novel" | grep -v grep || echo "应用进程未找到"
+
+          echo ""
+          echo "========== 检查崩溃日志 =========="
+          ls -lt ~/Library/Logs/DiagnosticReports/ | head -10 || echo "无崩溃日志"
+
+          # 如果有新的崩溃日志，显示内容
+          LATEST_CRASH=$(ls -t ~/Library/Logs/DiagnosticReports/*.crash 2>/dev/null | head -1)
+          if [ -n "$LATEST_CRASH" ]; then
+            echo ""
+            echo "========== 最新崩溃日志 =========="
+            cat "$LATEST_CRASH" | head -100
+          fi
+
+          # 清理
+          echo ""
+          echo "========== 清理 =========="
+          kill $APP_PID 2>/dev/null || true
+          sleep 2
+          hdiutil detach /Volumes/TestApp || true
+
+      # ===== 上传构建产物 =====
+      - name: 上传完整构建目录
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-debug-build
+          path: |
+            dist/package/*.dmg
+            dist/package/*.zip
+            dist/package/mac/
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: 上传诊断日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-diagnostic-logs
+          path: |
+            ~/Library/Logs/DiagnosticReports/*.crash
+            ~/.npm/_logs/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # ===== 生成修复建议 =====
+      - name: 生成修复建议
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "           调试总结与建议"
+          echo "=========================================="
+          echo ""
+
+          # 检查构建是否成功
+          if [ -f "dist/package/"*.dmg ]; then
+            echo "✓ DMG 文件生成成功"
+          else
+            echo "❌ DMG 文件生成失败"
+            echo "   建议：检查 electron-builder 配置和构建日志"
+          fi
+
+          # 检查 app bundle
+          if [ -d dist/package/mac/*.app ]; then
+            echo "✓ App bundle 存在"
+          else
+            echo "❌ App bundle 不存在"
+          fi
+
+          # 检查可执行文件
+          if find dist/package -name "*.app" -type d | head -1 | xargs -I {} test -f "{}/Contents/MacOS/"*; then
+            echo "✓ 可执行文件存在"
+          else
+            echo "❌ 可执行文件缺失"
+          fi
+
+          echo ""
+          echo "========== 常见问题排查 =========="
+          echo "1. 如果应用无法启动，检查："
+          echo "   - 是否缺少 entitlements 配置"
+          echo "   - 是否有代码签名问题"
+          echo "   - 是否有依赖库缺失"
+          echo ""
+          echo "2. 如果应用闪退，检查："
+          echo "   - 崩溃日志（DiagnosticReports）"
+          echo "   - Console.app 中的系统日志"
+          echo "   - electron-log 输出"
+          echo ""
+          echo "3. 下载 artifacts 进行本地测试"
+          echo ""
+          echo "=========================================="
