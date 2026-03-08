@@ -543,9 +543,22 @@ function registerIpcHandlers(ipcMain) {
 
   ipcMain.handle('ai:detectAiContent', async (_event, content) => {
     try {
-      return await aiService.detectAiContent(content)
+      const result = await aiService.detectAiContent(content)
+      // 确保返回的字符串是有效的 UTF-8
+      return {
+        score: result.score || 0,
+        analysis: String(result.analysis || ''),
+        aiLikeParts: Array.isArray(result.aiLikeParts) ? result.aiLikeParts : [],
+        suggestions: Array.isArray(result.suggestions) ? result.suggestions : []
+      }
     } catch (error) {
-      throw new Error(`AI 检测失败: ${error.message}`)
+      console.error('AI 检测错误:', error)
+      return {
+        score: 0,
+        analysis: '检测失败',
+        aiLikeParts: [],
+        suggestions: []
+      }
     }
   })
 

@@ -42,9 +42,10 @@ jobs:
           name: ${{ matrix.os }}-build
           path: |
             dist/package/*.exe
+            dist/package/*.dmg
             dist/package/*.zip
             dist/package/*.blockmap
-            dist/package/*.yml
+            dist/package/*-latest.yml
           if-no-files-found: warn
 
   release:

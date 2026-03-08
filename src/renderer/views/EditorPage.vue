@@ -112,7 +112,7 @@ import MarkdownEditor from '../components/MarkdownEditor.vue'
 import AiPanel from '../components/AiPanel.vue'
 import StatusBar from '../components/StatusBar.vue'
 import {
-  HomeFilled, DocumentChecked, MagicStick, EditPen,
+  HomeFilled, DocumentChecked, MagicStick, EditPen, Edit,
   Document, View, ChatDotRound, Download, Refresh, Reading
 } from '@element-plus/icons-vue'
 

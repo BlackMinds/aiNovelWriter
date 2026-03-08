@@ -14,10 +14,9 @@ const MODELS = {
 class AiService {
   constructor() {
     this.geminiClient = null
-    this.geminiApiKey = '手工输入'
+    this.geminiApiKey = ''
     this.glmApiKey = ''
     this.model = 'gemini-2.5-flash'
-    this.setGeminiApiKey(this.geminiApiKey)
   }
 
   setGeminiApiKey(key) {
@@ -375,37 +374,83 @@ ${chapterContent}`
   async detectAiContent(content) {
     this._ensureClient()
 
-    const systemPrompt = '你是一位专业的文本分析专家，擅长识别 AI 生成的内容特征。请客观分析文本，给出评分和具体建议。'
+    // 智能采样：如果内容过长，取开头+中间+结尾
+    let sampleText = content
+    if (content.length > 2000) {
+      const head = content.slice(0, 700)
+      const middle = content.slice(Math.floor(content.length / 2) - 350, Math.floor(content.length / 2) + 350)
+      const tail = content.slice(-700)
+      sampleText = `${head}\n...\n${middle}\n...\n${tail}`
+    }
+
+    const systemPrompt = '你是文本分析专家。必须严格按照 JSON 格式输出，确保所有字符串值都用双引号包裹。'
 
     const messages = [
       {
         role: 'user',
-        content: `请分析以下文本，判断哪些部分可能是 AI 生成的。请严格按照 JSON 格式输出，不要输出任何其他内容：
+        content: `分析文本的 AI 生成程度。必须输出合法的 JSON，示例：
+{"score":75,"analysis":"这是分析内容"}
 
-{
-  "score": 0-100的整数（AI程度评分，0=完全人工，100=完全AI），
-  "analysis": "整体分析（2-3句话）",
-  "aiLikeParts": [
-    { "text": "具体文本片段", "reason": "判断理由" }
-  ],
-  "suggestions": ["改进建议1", "建议2"]
-}
+要求：
+1. score 是 0-100 的数字
+2. analysis 是字符串，必须用双引号包裹
+3. 不要输出 markdown 代码块
+4. 确保 JSON 完整且合法
 
 待分析文本：
-${content.slice(0, 3000)}`
+${sampleText}`
       }
     ]
 
     const result = await this.streamChat(systemPrompt, messages, null)
 
     try {
-      const jsonMatch = result.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0])
+      // 清理 markdown 代码块
+      let cleaned = result.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+
+      // 提取 JSON
+      const start = cleaned.indexOf('{')
+      const end = cleaned.lastIndexOf('}')
+
+      if (start === -1 || end === -1 || end <= start) {
+        throw new Error('未找到有效的 JSON 对象')
       }
-      return { score: 0, analysis: '解析失败', aiLikeParts: [], suggestions: [] }
-    } catch {
-      return { score: 0, analysis: result.slice(0, 200), aiLikeParts: [], suggestions: [] }
+
+      let jsonStr = cleaned.substring(start, end + 1)
+
+      // 尝试解析
+      let parsed
+      try {
+        parsed = JSON.parse(jsonStr)
+      } catch (e) {
+        // 解析失败，尝试修复常见问题
+        console.log('JSON 解析失败，尝试修复...')
+
+        // 移除多余的逗号
+        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1')
+
+        // 再次尝试
+        parsed = JSON.parse(jsonStr)
+      }
+
+      // 验证并返回
+      return {
+        score: typeof parsed.score === 'number' ? parsed.score : 0,
+        analysis: String(parsed.analysis || '无分析内容'),
+        aiLikeParts: [],
+        suggestions: []
+      }
+
+    } catch (e) {
+      console.error('AI 检测解析失败:', e.message)
+      console.error('原始返回:', result.slice(0, 300))
+
+      return {
+        score: 0,
+        analysis: '解析失败，请重试',
+        aiLikeParts: [],
+        suggestions: []
+      }
     }
   }
 
