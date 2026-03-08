@@ -41,6 +41,7 @@ nul
 test1.txt
 test2.txt
 tmpinfo.txt
+dev-log.txt
 
 # Claude
 .claude/
