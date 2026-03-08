@@ -374,28 +374,28 @@ ${chapterContent}`
   async detectAiContent(content) {
     this._ensureClient()
 
-    // 智能采样：如果内容过长，取开头+中间+结尾
+    // 小于8000字全文分析，大于则采样
     let sampleText = content
-    if (content.length > 2000) {
-      const head = content.slice(0, 700)
-      const middle = content.slice(Math.floor(content.length / 2) - 350, Math.floor(content.length / 2) + 350)
-      const tail = content.slice(-700)
-      sampleText = `${head}\n...\n${middle}\n...\n${tail}`
+    if (content.length > 8000) {
+      const head = content.slice(0, 3000)
+      const middle = content.slice(Math.floor(content.length / 2) - 1000, Math.floor(content.length / 2) + 1000)
+      const tail = content.slice(-3000)
+      sampleText = `${head}\n...(中间省略)...\n${middle}\n...(中间省略)...\n${tail}`
     }
 
-    const systemPrompt = '你是文本分析专家。必须严格按照 JSON 格式输出，确保所有字符串值都用双引号包裹。'
+    const systemPrompt = '你是文本分析专家。输出必须是合法的 JSON 格式。'
 
     const messages = [
       {
         role: 'user',
-        content: `分析文本的 AI 生成程度。必须输出合法的 JSON，示例：
-{"score":75,"analysis":"这是分析内容"}
+        content: `分析文本的 AI 生成程度，输出 JSON 格式：
+{"score":75,"analysis":"分析内容"}
 
-要求：
-1. score 是 0-100 的数字
-2. analysis 是字符串，必须用双引号包裹
-3. 不要输出 markdown 代码块
-4. 确保 JSON 完整且合法
+注意：
+- score 是 0-100 的数字
+- analysis 用双引号包裹
+- 不要用 markdown 代码块
+- 保持 JSON 简洁完整
 
 待分析文本：
 ${sampleText}`
@@ -405,45 +405,36 @@ ${sampleText}`
     const result = await this.streamChat(systemPrompt, messages, null)
 
     try {
-      // 清理 markdown 代码块
       let cleaned = result.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
 
-      // 提取 JSON
       const start = cleaned.indexOf('{')
       const end = cleaned.lastIndexOf('}')
 
       if (start === -1 || end === -1 || end <= start) {
-        throw new Error('未找到有效的 JSON 对象')
+        throw new Error('未找到 JSON')
       }
 
       let jsonStr = cleaned.substring(start, end + 1)
 
-      // 尝试解析
       let parsed
       try {
         parsed = JSON.parse(jsonStr)
       } catch (e) {
-        // 解析失败，尝试修复常见问题
-        console.log('JSON 解析失败，尝试修复...')
-
-        // 移除多余的逗号
+        // 移除多余逗号后重试
         jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1')
-
-        // 再次尝试
         parsed = JSON.parse(jsonStr)
       }
 
-      // 验证并返回
       return {
         score: typeof parsed.score === 'number' ? parsed.score : 0,
-        analysis: String(parsed.analysis || '无分析内容'),
+        analysis: String(parsed.analysis || '无分析'),
         aiLikeParts: [],
         suggestions: []
       }
 
     } catch (e) {
-      console.error('AI 检测解析失败:', e.message)
-      console.error('原始返回:', result.slice(0, 300))
+      console.error('解析失败:', e.message)
+      console.error('原始返回:', result.slice(0, 500))
 
       return {
         score: 0,
