@@ -57,6 +57,10 @@
         "dmg",
         "zip"
       ],
+      "arch": [
+        "x64",
+        "arm64"
+      ],
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "identity": null,
