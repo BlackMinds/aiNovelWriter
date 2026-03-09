@@ -1,6 +1,6 @@
 {
   "name": "ai-novel-writer",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "AI-powered novel writing desktop application",
   "main": "src/main/index.js",
   "scripts": {
