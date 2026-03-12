@@ -45,25 +45,27 @@ function formatWordCount(count) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 2px 12px;
-  background: var(--bg-tertiary);
+  padding: 4px 16px;
+  background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
-  height: 24px;
-  font-size: 12px;
+  height: 28px;
+  font-size: 13px;
   flex-shrink: 0;
+  backdrop-filter: blur(10px);
 }
 
 .status-left, .status-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
 }
 
 .status-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .file-name {
@@ -71,23 +73,24 @@ function formatWordCount(count) {
 }
 
 .file-name.dirty {
-  color: var(--warning);
+  color: var(--accent);
 }
 
 .ai-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--text-secondary);
 }
 
 .ai-dot.active {
   background: var(--success);
-  animation: pulse 1s infinite;
+  animation: pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--success);
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.9); }
 }
 </style>

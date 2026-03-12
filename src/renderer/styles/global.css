@@ -1,15 +1,22 @@
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --bg-card: #1e2a4a;
-  --text-primary: #e0e0e0;
-  --text-secondary: #a0a0b0;
-  --accent: #e94560;
-  --accent-hover: #ff6b81;
-  --border-color: #2a2a4a;
-  --success: #67c23a;
-  --warning: #e6a23c;
+  --bg-primary: #0f0f1e;
+  --bg-secondary: #1a1a2e;
+  --bg-tertiary: #252538;
+  --bg-card: #1e1e32;
+  --text-primary: #f0f0f5;
+  --text-secondary: #a8a8b8;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-light: rgba(99, 102, 241, 0.1);
+  --border-color: #2a2a3e;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
 }
 
 * {
@@ -40,8 +47,8 @@ html.dark {
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -50,11 +57,12 @@ html.dark {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
-  border-radius: 3px;
+  border-radius: 4px;
+  transition: background 0.2s;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
+  background: var(--accent);
 }
 
 /* Button overrides */
@@ -63,12 +71,31 @@ html.dark {
   --el-button-border-color: var(--accent);
   --el-button-hover-bg-color: var(--accent-hover);
   --el-button-hover-border-color: var(--accent-hover);
+  border-radius: var(--radius-sm);
+  transition: all 0.3s ease;
+}
+
+.el-button {
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.el-button:hover {
+  transform: translateY(-1px);
 }
 
 /* Card overrides */
 .el-card {
   --el-card-bg-color: var(--bg-card);
   border-color: var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.el-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 /* Tree overrides */

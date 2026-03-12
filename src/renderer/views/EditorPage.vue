@@ -526,29 +526,43 @@ watch(() => aiStore.isStreaming, (streaming) => {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg-primary);
 }
 
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 12px;
+  padding: 8px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  height: 42px;
+  height: 52px;
   flex-shrink: 0;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-sm);
 }
 
 .toolbar-left, .toolbar-center, .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+}
+
+.toolbar .el-button {
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.toolbar .el-button:hover {
+  background: var(--accent-light);
+  color: var(--accent-hover);
 }
 
 .project-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  margin-left: 8px;
+  margin-left: 12px;
+  color: var(--text-primary);
 }
 
 .main-content {
@@ -562,12 +576,14 @@ watch(() => aiStore.isStreaming, (streaming) => {
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   overflow-y: auto;
+  box-shadow: var(--shadow-sm);
 }
 
 .center-panel {
   flex: 1;
   overflow: hidden;
   min-width: 300px;
+  background: var(--bg-primary);
 }
 
 .right-panel {
@@ -575,6 +591,7 @@ watch(() => aiStore.isStreaming, (streaming) => {
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
   overflow-y: auto;
+  box-shadow: var(--shadow-sm);
 }
 
 .resize-handle {
@@ -582,27 +599,41 @@ watch(() => aiStore.isStreaming, (streaming) => {
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
 .resize-handle:hover {
   background: var(--accent);
 }
 
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -2px;
+  right: -2px;
+  bottom: 0;
+}
+
 .preview-pane {
-  padding: 24px;
+  padding: 32px;
   overflow-y: auto;
   height: 100%;
   line-height: 1.8;
+  background: var(--bg-primary);
 }
 
 .markdown-body h1, .markdown-body h2, .markdown-body h3 {
-  margin-top: 20px;
-  margin-bottom: 10px;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .markdown-body p {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   text-indent: 2em;
+  color: var(--text-primary);
 }
 </style>

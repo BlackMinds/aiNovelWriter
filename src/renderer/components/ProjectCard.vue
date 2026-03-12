@@ -56,46 +56,72 @@ function formatTime(timestamp) {
 <style scoped>
 .project-card {
   cursor: pointer;
-  transition: transform 0.2s, border-color 0.2s;
+  transition: all 0.3s ease;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  position: relative;
+}
+
+.project-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), #a855f7);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .project-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
   border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+
+.project-card:hover::before {
+  opacity: 1;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .project-name {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .card-meta {
   display: flex;
-  gap: 16px;
-  margin-bottom: 8px;
+  gap: 20px;
+  margin-bottom: 12px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .card-path {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
-  opacity: 0.6;
+  opacity: 0.5;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
 }
 </style>

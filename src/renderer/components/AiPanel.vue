@@ -205,87 +205,111 @@ async function copyContent() {
   height: 100%;
   display: flex;
   flex-direction: column;
+  background: var(--bg-secondary);
 }
 
 .panel-header {
-  padding: 8px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--bg-tertiary);
 }
 
 .panel-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.model-select {
-  width: 140px;
+.panel-title::before {
+  content: '✨';
+  font-size: 16px;
 }
 
 .quick-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
 }
 
+.quick-actions .el-button {
+  flex: 1;
+  min-width: 80px;
+}
+
 .prompt-section {
-  padding: 10px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .send-btn {
-  margin-top: 8px;
+  margin-top: 10px;
   width: 100%;
+  border-radius: var(--radius-sm);
 }
 
 .output-section {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px;
+  background: var(--bg-primary);
 }
 
 .streaming-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: var(--accent);
-  margin-bottom: 12px;
-  font-size: 13px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  padding: 12px;
+  background: var(--accent-light);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
 }
 
 .ai-output {
   font-size: 14px;
   line-height: 1.8;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
 }
 
 .empty-state {
   text-align: center;
   color: var(--text-secondary);
-  padding: 40px 20px;
-  font-size: 13px;
+  padding: 60px 20px;
+  font-size: 14px;
 }
 
 .empty-state p {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  line-height: 1.6;
 }
 
 .action-bar {
   display: flex;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
 }
 
 .markdown-body {
   word-break: break-word;
+  color: var(--text-primary);
 }
 
 .markdown-body :deep(p) {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 </style>
